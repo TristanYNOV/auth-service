@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  auth_db:
+    image: mongo:latest
+    container_name: auth_db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+    ports:
+      - 27017:27017
+    volumes:
+      - auth_db_data:/data/db
+
+
+volumes:
+  auth_db_data:
