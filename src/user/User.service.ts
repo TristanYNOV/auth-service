@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { User } from "../schemas/User.schema";
 import { Model } from "mongoose";
 import { CreateUserDto } from "./dto/CreateUser.dto";
@@ -12,5 +12,13 @@ export class UserService {
     const newUser = new this.userModel(createUserDto);
 
     return newUser.save();
+  }
+
+  getAllUsers() {
+    return this.userModel.find();
+  }
+
+  getUserById(id: string) {
+    return this.userModel.findById(id)
   }
 }
