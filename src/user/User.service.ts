@@ -3,6 +3,7 @@ import { User } from "../schemas/User.schema";
 import { Model } from "mongoose";
 import { CreateUserDto } from "./dto/CreateUser.dto";
 import { InjectModel } from "@nestjs/mongoose";
+import { UpdateUserDto } from "../schemas/UpdateUser.schema";
 
 @Injectable()
 export class UserService {
@@ -20,5 +21,14 @@ export class UserService {
 
   getUserById(id: string) {
     return this.userModel.findById(id)
+  }
+
+  // TODO: Manage immutable Password better with dto
+  updateUSer(id:string, updateUserDto: UpdateUserDto) {
+    return this.userModel.findByIdAndUpdate(id, updateUserDto, {new: true, lean: true, overwriteImmutable: true});
+  }
+
+  deleteUserById(id: string) {
+    return this.userModel.findByIdAndDelete(id);
   }
 }

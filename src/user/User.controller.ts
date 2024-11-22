@@ -1,7 +1,18 @@
-import { Body, Controller, Get, HttpException, HttpStatus, NotFoundException, Param, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  Patch,
+  Post, ValidationPipe
+} from "@nestjs/common";
 import { UserService } from "./User.service";
 import { CreateUserDto } from "./dto/CreateUser.dto";
 import mongoose from "mongoose";
+import { UpdateUserDto } from "../schemas/UpdateUser.schema";
 
 @Controller('users')
 export class UserController {
@@ -21,8 +32,28 @@ export class UserController {
   async getUserById(@Param('id') id: string) {
     const isValid = mongoose.Types.ObjectId.isValid(id);
     if (!isValid) throw new HttpException(`User ID: ${id} doesn't match format`, HttpStatus.NOT_FOUND);
-    const foundUser = await this.userService.getUserById(id);
-    if(!foundUser) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    return foundUser;
+    const user = await this.userService.getUserById(id);
+    if(!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    return user;
+  }
+
+  @Delete(':id')
+  async deleteUser(@Param('id') id: string) {
+    const isValid = mongoose.Types.ObjectId.isValid(id);
+    if(!isValid) throw new HttpException(`User ID: ${id} doesn't match format`, HttpStatus.BAD_REQUEST);
+
+    const user = await this.userService.deleteUserById(id);
+    if(!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    return {
+      user: user,
+      message: 'User Deleted'
+    }
+  }
+
+  @Patch(':id')
+  updateUser(@Param('id') id: string, @Body() updateUSerDto: UpdateUserDto) {
+    const isValid = mongoose.Types.ObjectId.isValid(id);
+    if(!isValid) throw new HttpException(`User ID: ${id} doesn't match format`, HttpStatus.BAD_REQUEST);
+    return this.userService.updateUSer(id, updateUSerDto);
   }
 }
