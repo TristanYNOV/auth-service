@@ -22,8 +22,8 @@ export class UserService {
   getUserById(id: string) {
     return this.userModel.findById(id)
   }
-
-  // TODO: Manage immutable Password better with dto
+x
+  // TODO: Manage immutable Password better with dto (maybe new route for update userPassword)
   updateUSer(id:string, updateUserDto: UpdateUserDto) {
     return this.userModel.findByIdAndUpdate(id, updateUserDto, {new: true, lean: true, overwriteImmutable: true});
   }
