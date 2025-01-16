@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from "@nestjs/mongoose";
 import { UserModule } from "./user/User.module";
+import { ConfigModule } from "@nestjs/config";
 
 @Module({
   imports: [
@@ -8,6 +9,9 @@ import { UserModule } from "./user/User.module";
       dbName: 'auth_db',
     }),
     UserModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    })
   ],
   controllers: [],
   providers: [],

@@ -13,6 +13,8 @@ import { UserService } from "./User.service";
 import { CreateUserDto } from "./dto/CreateUser.dto";
 import mongoose from "mongoose";
 import { UpdateUserDto } from "../schemas/UpdateUser.schema";
+import { hashSync } from "bcrypt";
+import { encryptPassword } from "../utils/bcrypt";
 
 function checkIDParam(id: string) {
   const isValid = mongoose.Types.ObjectId.isValid(id);
@@ -24,8 +26,10 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  createUser(@Body() createUserDto: CreateUserDto) {
-    return this.userService.createUser(createUserDto);
+  async createUser(@Body() createUserDto: CreateUserDto) {
+    const hash = await encryptPassword(createUserDto.password);
+
+    return this.userService.createUser({...createUserDto, password: hash });
   }
 
   @Get()
@@ -56,9 +60,10 @@ export class UserController {
   }
 
   @Patch(':id')
-  updateUser(@Param('id') id: string, @Body() updateUSerDto: UpdateUserDto) {
+  async updateUser(@Param('id') id: string, @Body() updateUSerDto: UpdateUserDto) {
     checkIDParam(id);
+    const hash = await encryptPassword(updateUSerDto.password);
 
-    return this.userService.updateUSer(id, updateUSerDto);
+    return this.userService.updateUSer(id, {...updateUSerDto, password: hash });
   }
 }

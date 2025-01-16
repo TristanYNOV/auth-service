@@ -9,6 +9,6 @@ export class UpdateUserDto {
   @IsString()
   email: string;
 
-  @IsStrongPassword()
+  @IsStrongPassword({minLength: 8, minUppercase: 1, minNumbers: 1})
   password: string;
 }
