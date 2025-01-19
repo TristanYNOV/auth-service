@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import { User } from "../schemas/User.schema";
 import { Model } from "mongoose";
 import { CreateUserDto } from "./dto/CreateUser.dto";
@@ -22,7 +22,29 @@ export class UserService {
   getUserById(id: string) {
     return this.userModel.findById(id)
   }
-x
+
+  async getUserByEmail(email: string) {
+    try {
+      const response = await this.userModel.findOne({email: email}).exec();
+      if(!response) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+      return response;
+    } catch (error) {
+      throw new HttpException('Failed to get user by email', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async getUserByPseudo(pseudo: string) {
+    try {
+      const response = await this.userModel.findOne({pseudo: pseudo});
+      if(!response) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+      return response;
+    } catch (error) {
+      throw new HttpException('Failed to get user by alias', HttpStatus.BAD_REQUEST);
+    }
+  }
+
   // TODO: Manage immutable Password better with dto (maybe new route for update userPassword)
   updateUSer(id:string, updateUserDto: UpdateUserDto) {
     return this.userModel.findByIdAndUpdate(id, updateUserDto, {new: true, lean: true, overwriteImmutable: true});
