@@ -7,7 +7,6 @@ export class LocalGuard extends AuthGuard('local') {
   canActivate(
     context: ExecutionContext,
   ): boolean | Promise<boolean> | Observable<boolean> {
-    console.log('Graouuu')
     return super.canActivate(context);
   }
 }

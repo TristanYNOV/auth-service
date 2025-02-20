@@ -7,11 +7,10 @@ import { AuthPayloadDto } from '../dto/auth.dto';
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly authService: AuthService) {
-    super({usernameField: 'pseudo'});
+    super({usernameField:'email'});
   }
 
-  async validate(authPayloadDto: AuthPayloadDto) {
-    console.log('Haaaaa')
-    return await this.authService.validateUser(authPayloadDto);
+  async validate(username: string, password: string) {
+    return await this.authService.validateUser({email: username, password: password});
   }
 }
