@@ -10,7 +10,6 @@ export class AuthService {
   constructor(private readonly userService: UserService, private readonly jwtService: JwtService) {}
 
   async validateUser(user: AuthPayloadDto) {
-    console.log('user',user)
     const findUser = await this.userService.getUserByEmail(user.email);
     if(!findUser) return null;
 
