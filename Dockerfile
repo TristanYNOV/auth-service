@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Étape 2 : Exécution de l'application en production
-FROM node:18 AS runner
+FROM node:20 AS runner
 
 WORKDIR /usr/src/app
 
