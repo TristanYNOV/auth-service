@@ -13,7 +13,6 @@ import { UserService } from "./User.service";
 import { CreateUserDto } from "./dto/CreateUser.dto";
 import mongoose from "mongoose";
 import { UpdateUserDto } from "../schemas/UpdateUser.schema";
-import { hashSync } from "bcrypt";
 import { encryptPassword } from "../utils/bcrypt";
 
 function checkIDParam(id: string) {
@@ -37,10 +36,26 @@ export class UserController {
     return this.userService.getAllUsers();
   }
 
-  @Get(':id')
+  @Get('searchId/:id')
   async getUserById(@Param('id') id: string) {
     checkIDParam(id);
     const user = await this.userService.getUserById(id);
+    if(!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+    return user;
+  }
+
+  @Get('searchPseudo/:pseudo')
+  async getUSerByPseudo(@Param('pseudo') pseudo: string) {
+    const user = await this.userService.getUserByPseudo(pseudo);
+    if(!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+    return user;
+  }
+
+  @Get('searchEmail/:email')
+  async getUSerByEmail(@Param('email') email: string) {
+    const user = await this.userService.getUserByEmail(email);
     if(!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
     return user;
