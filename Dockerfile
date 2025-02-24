@@ -1,5 +1,5 @@
 # Étape 1 : Construction de l'application
-FROM node:18 AS builder
+FROM node:20 AS builder
 
 # Définition du dossier de travail
 WORKDIR /usr/src/app
