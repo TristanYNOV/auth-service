@@ -3,8 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { UserModule } from './user/User.module';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
-import process from 'node:process';
-console.log('DB URL :', process?.env.DATABASE_URL);
+import * as process from 'node:process';
 
 @Module({
   imports: [
@@ -12,9 +11,9 @@ console.log('DB URL :', process?.env.DATABASE_URL);
       isGlobal: true,
     }),
     MongooseModule.forRoot(
-      process?.env.DATABASE_URL || 'mongodb://localhost:300',
+      process.env.DATABASE_URL || 'mongodb://localhost:3000',
       {
-        dbName: process?.env.DB_NAME || 'auth_db',
+        dbName: process.env.DB_NAME || 'auth_db',
       },
     ),
     UserModule,

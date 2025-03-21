@@ -1,11 +1,11 @@
 # Étape 1 : Construction de l'application
-FROM node:20 AS builder
+FROM node:22 AS builder
 
 # Définition du dossier de travail
 WORKDIR /usr/src/app
 
 # Copie des fichiers nécessaires
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .env ./
 
 # Installation des dépendances
 RUN npm install --legacy-peer-deps
@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Étape 2 : Exécution de l'application en production
-FROM node:20 AS runner
+FROM node:22 AS runner
 
 WORKDIR /usr/src/app
 
@@ -29,10 +29,10 @@ COPY package.json package-lock.json ./
 RUN npm install --only=production
 
 # Définition de la variable d'environnement
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 # Exposition du port de l'API
 EXPOSE 3000
 
 # Commande de démarrage de l'application
-CMD ["node", "dist/main"]
+CMD ["node", "dist/main.js"]
