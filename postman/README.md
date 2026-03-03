@@ -1,47 +1,43 @@
-# Postman kit - auth-service
+# Postman kit - auth-service (P0)
 
 ## Fichiers
 
-- `auth-service.collection.json`
-- `env.traefik.json` (`baseUrl = http://localhost/api/auth`)
-- `env.direct.json` (`baseUrl = http://localhost:3000`)
+- `auth-service.postman_collection.json`
+- `auth-service.local.postman_environment.json`
 
-## Import
+## Variables
 
-1. Importer la collection.
-2. Importer un environnement (`via Traefik` ou `direct`).
-3. Sélectionner l’environnement actif.
+- `useTraefik` (`true`|`false`)
+- `baseUrlTraefik` (`http://localhost/api/auth`)
+- `baseUrlDirect` (`http://localhost:3000`)
+- `baseUrl` (calculée automatiquement)
+- `userPseudo`, `userEmail`, `userPassword`
+- `accessTokenUser`
+- `createdUserId`
+- `userId` (depuis `payload.sub`)
 
-## Variables d’environnement
+## Scripts inclus
 
-- `baseUrl`
-- `pseudo`, `email`, `password`
-- `pseudoUpdated`, `emailUpdated`, `passwordUpdated`
-- `userId` (à renseigner après création user)
-- `authToken` (alimenté automatiquement après login OK)
+- Collection pre-request:
+  - calcule `baseUrl` selon `useTraefik`
+  - injecte `Authorization: Bearer {{accessTokenUser}}` si présent
+- Register pre-request:
+  - génère `userPseudo`, `userEmail`, `userPassword` uniques
+- Register tests:
+  - enregistre `createdUserId`
+  - vérifie l'absence de `password`
+- Login tests:
+  - enregistre le token dans `accessTokenUser`
+  - décode le JWT et enregistre `userId = payload.sub`, `userEmail`, `userPseudo`
+- Me tests:
+  - vérifient le code 200
+  - vérifient l'absence de `password`
 
-## Flows de test recommandés
+## Ordre runner
 
-## Flow A - happy path
-
-1. `Users - Create (OK)`
-2. Copier `_id` de la réponse dans `userId`
-3. `Auth - Login (OK)`
-   - script test: stocke `pm.response.text()` dans `authToken`
-4. `Auth - Test JWT`
-5. `Users - Update`
-6. `Users - Delete`
-
-## Flow B - erreurs
-
-- `Users - Create (KO validation)` -> attend `400`
-- `Users - Get by ID (KO invalid id)` -> attend `400`
-- `Auth - Login (KO invalid credentials)` -> attend `401` ou `400` selon cas (password incorrect vs email absent)
-- `Auth - Test JWT (KO no token)` -> attend `401`
-
-## Notes Traefik
-
-- La collection utilise des paths du service (`/users`, `/auth/login`, etc.).
-- En environnement `via Traefik`, `baseUrl` inclut déjà `/api/auth`, donc les URLs effectives deviennent par exemple:
-  - `http://localhost/api/auth/users`
-  - `http://localhost/api/auth/auth/login`
+1. `Health`
+2. `Register`
+3. `Login`
+4. `Me - Get`
+5. `Me - Patch`
+6. `Me - Delete`
