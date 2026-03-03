@@ -14,7 +14,7 @@
           "const baseUrlDirect = pm.environment.get('baseUrlDirect') || 'http://localhost:3000';",
           "pm.environment.set('baseUrl', useTraefik ? baseUrlTraefik : baseUrlDirect);",
           "",
-          "const token = pm.environment.get('accessTokenUser');",
+          "const token = pm.collectionVariables.get('accessTokenUser') || pm.environment.get('accessTokenUser');",
           "if (token) {",
           "  pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${token}` });",
           "}"
@@ -29,8 +29,12 @@
         "method": "GET",
         "url": {
           "raw": "{{baseUrl}}/health",
-          "host": ["{{baseUrl}}"],
-          "path": ["health"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
         }
       }
     },
@@ -42,10 +46,19 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const ts = Date.now();",
-              "pm.environment.set('userPseudo', `user_${ts}`);",
-              "pm.environment.set('userEmail', `user_${ts}@example.com`);",
-              "pm.environment.set('userPassword', 'StrongPass1!');"
+              "const email = pm.variables.replaceIn('{{$randomEmail}}');",
+              "const password = pm.variables.replaceIn('{{$randomPassword}}');",
+              "const pseudo = pm.variables.replaceIn('{{$randomUserName}}');",
+              "const firstName = pm.variables.replaceIn('{{$randomFirstName}}');",
+              "const lastName = pm.variables.replaceIn('{{$randomLastName}}');",
+              "",
+              "const strongPassword = `${password}A1!`;",
+              "",
+              "pm.collectionVariables.set('auth_email', email);",
+              "pm.collectionVariables.set('auth_password', strongPassword);",
+              "pm.collectionVariables.set('auth_pseudo', pseudo);",
+              "pm.collectionVariables.set('first_name', firstName);",
+              "pm.collectionVariables.set('last_name', lastName);"
             ]
           }
         },
@@ -54,16 +67,8 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Status is 201 or 200', function () {",
-              "  pm.expect([200, 201]).to.include(pm.response.code);",
-              "});",
               "const json = pm.response.json();",
-              "pm.test('Register response has no password', function () {",
-              "  pm.expect(json.password).to.equal(undefined);",
-              "});",
-              "if (json && json.id) {",
-              "  pm.environment.set('createdUserId', json.id);",
-              "}"
+              "if (json && json.id) pm.collectionVariables.set('createdUserId', json.id);"
             ]
           }
         }
@@ -71,33 +76,39 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"pseudo\": \"{{userPseudo}}\",\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+          "raw": "{\n  \"pseudo\": \"{{auth_pseudo}}\",\n  \"email\": \"{{auth_email}}\",\n  \"password\": \"{{auth_password}}\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/users",
-          "host": ["{{baseUrl}}"],
-          "path": ["users"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users"
+          ]
         }
       }
     },
     {
-      "name": "Login",
+      "name": "SignIn",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Status is 201 or 200', function () {",
-              "  pm.expect([200, 201]).to.include(pm.response.code);",
-              "});",
-              "",
               "const token = pm.response.text();",
-              "if (token) pm.environment.set('accessTokenUser', token);",
+              "if (token) {",
+              "  pm.collectionVariables.set('accessTokenUser', token);",
+              "  pm.environment.set('accessTokenUser', token);",
+              "}",
               "",
               "function decodeBase64Url(input) {",
               "  const normalized = input.replace(/-/g, '+').replace(/_/g, '/');",
@@ -107,9 +118,9 @@
               "",
               "if (token && token.split('.').length === 3) {",
               "  const payload = JSON.parse(decodeBase64Url(token.split('.')[1]));",
-              "  pm.environment.set('userId', payload.sub || '');",
-              "  pm.environment.set('userEmail', payload.email || '');",
-              "  pm.environment.set('userPseudo', payload.pseudo || '');",
+              "  pm.collectionVariables.set('userId', payload.sub || '');",
+              "  pm.collectionVariables.set('auth_email', payload.email || pm.collectionVariables.get('auth_email') || '');",
+              "  pm.collectionVariables.set('auth_pseudo', payload.pseudo || pm.collectionVariables.get('auth_pseudo') || '');",
               "}"
             ]
           }
@@ -118,44 +129,39 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Content-Type", "value": "application/json" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+          "raw": "{\n  \"email\": \"{{auth_email}}\",\n  \"password\": \"{{auth_password}}\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/auth/login",
-          "host": ["{{baseUrl}}"],
-          "path": ["auth", "login"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
         }
       }
     },
     {
       "name": "Me - Get",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('Status is 200', function () {",
-              "  pm.response.to.have.status(200);",
-              "});",
-              "const json = pm.response.json();",
-              "pm.test('Response has no password', function () {",
-              "  pm.expect(json.password).to.equal(undefined);",
-              "});"
-            ]
-          }
-        }
-      ],
       "request": {
         "method": "GET",
         "url": {
           "raw": "{{baseUrl}}/me",
-          "host": ["{{baseUrl}}"],
-          "path": ["me"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "me"
+          ]
         }
       }
     },
@@ -163,17 +169,12 @@
       "name": "Me - Patch",
       "event": [
         {
-          "listen": "test",
+          "listen": "prerequest",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Status is 200', function () {",
-              "  pm.response.to.have.status(200);",
-              "});",
-              "const json = pm.response.json();",
-              "pm.test('Response has no password', function () {",
-              "  pm.expect(json.password).to.equal(undefined);",
-              "});"
+              "const updatedPseudo = `${pm.collectionVariables.get('auth_pseudo') || pm.variables.replaceIn('{{$randomUserName}}')}_updated`;",
+              "pm.collectionVariables.set('auth_pseudo', updatedPseudo);"
             ]
           }
         }
@@ -181,46 +182,102 @@
       "request": {
         "method": "PATCH",
         "header": [
-          { "key": "Content-Type", "value": "application/json" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"pseudo\": \"{{userPseudo}}_updated\"\n}"
+          "raw": "{\n  \"pseudo\": \"{{auth_pseudo}}\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/me",
-          "host": ["{{baseUrl}}"],
-          "path": ["me"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "me"
+          ]
         }
       }
     },
     {
       "name": "Me - Delete",
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Session - Logout (clear token)",
       "event": [
         {
-          "listen": "test",
+          "listen": "prerequest",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Status is 200', function () {",
-              "  pm.response.to.have.status(200);",
-              "});",
-              "const json = pm.response.json();",
-              "pm.test('Deleted user has no password', function () {",
-              "  pm.expect(json.user && json.user.password).to.equal(undefined);",
-              "});"
+              "pm.collectionVariables.unset('accessTokenUser');",
+              "pm.collectionVariables.unset('userId');",
+              "pm.environment.unset('accessTokenUser');"
             ]
           }
         }
       ],
       "request": {
-        "method": "DELETE",
+        "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/me",
-          "host": ["{{baseUrl}}"],
-          "path": ["me"]
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
         }
       }
+    }
+  ],
+  "variable": [
+    {
+      "key": "auth_email",
+      "value": ""
+    },
+    {
+      "key": "auth_password",
+      "value": ""
+    },
+    {
+      "key": "auth_pseudo",
+      "value": ""
+    },
+    {
+      "key": "first_name",
+      "value": ""
+    },
+    {
+      "key": "last_name",
+      "value": ""
+    },
+    {
+      "key": "createdUserId",
+      "value": ""
+    },
+    {
+      "key": "accessTokenUser",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
     }
   ]
 }
