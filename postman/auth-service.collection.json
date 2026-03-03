@@ -14,9 +14,14 @@
           "const baseUrlDirect = pm.environment.get('baseUrlDirect') || 'http://localhost:3000';",
           "pm.environment.set('baseUrl', useTraefik ? baseUrlTraefik : baseUrlDirect);",
           "",
-          "const token = pm.collectionVariables.get('accessTokenUser') || pm.environment.get('accessTokenUser');",
-          "if (token) {",
-          "  pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${token}` });",
+          "const rawToken = pm.collectionVariables.get('accessTokenUser') || pm.environment.get('accessTokenUser') || '';",
+          "const cleanedToken = String(rawToken)",
+          "  .trim()",
+          "  .replace(/^Bearer\\s+/i, '')",
+          "  .replace(/^\"|\"$/g, '');",
+          "",
+          "if (cleanedToken) {",
+          "  pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${cleanedToken}` });",
           "}"
         ]
       }
@@ -104,7 +109,20 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "const token = pm.response.text();",
+              "const responseText = pm.response.text().trim();",
+              "const fromJsonString = responseText.startsWith('\\\"') && responseText.endsWith('\\\"')",
+              "  ? JSON.parse(responseText)",
+              "  : responseText;",
+              "const token = String(fromJsonString)",
+              "  .trim()",
+              "  .replace(/^Bearer\\s+/i, '')",
+              "  .replace(/^\"|\"$/g, '');",
+              "",
+              "pm.test('SignIn stores a usable JWT token', function () {",
+              "  pm.expect(token).to.be.a('string').and.not.empty;",
+              "  pm.expect(token.split('.').length).to.eql(3);",
+              "});",
+              "",
               "if (token) {",
               "  pm.collectionVariables.set('accessTokenUser', token);",
               "  pm.environment.set('accessTokenUser', token);",
@@ -163,7 +181,27 @@
             "me"
           ]
         }
-      }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const authHeader = pm.request.headers.get('Authorization') || '';",
+              "const token = pm.environment.get('accessTokenUser') || pm.collectionVariables.get('accessTokenUser') || '';",
+              "const maskedToken = token ? `${String(token).slice(0, 12)}...` : '(missing)';",
+              "",
+              "console.log('Me - Get Authorization header:', authHeader || '(missing)');",
+              "console.log('Me - Get accessTokenUser (masked):', maskedToken);",
+              "",
+              "pm.test('Authorization header is present and starts with Bearer', function () {",
+              "  pm.expect(authHeader, 'Authorization header missing. Run SignIn first and verify accessTokenUser.').to.match(/^Bearer\\s+.+$/);",
+              "});"
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "Me - Patch",
