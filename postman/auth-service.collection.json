@@ -1,0 +1,215 @@
+{
+  "info": {
+    "_postman_id": "4db3fce4-cb48-4e36-9010-f8f1cbf11111",
+    "name": "auth-service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection basée sur les endpoints réellement présents dans auth-service."
+  },
+  "item": [
+    {
+      "name": "Users - Create (OK)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pseudo\": \"{{pseudo}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users",
+          "host": ["{{baseUrl}}"],
+          "path": ["users"]
+        }
+      }
+    },
+    {
+      "name": "Users - Create (KO validation)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pseudo\": \"\",\n  \"email\": \"not-an-email\",\n  \"password\": \"weak\",\n  \"extra\": \"forbidden\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users",
+          "host": ["{{baseUrl}}"],
+          "path": ["users"]
+        }
+      }
+    },
+    {
+      "name": "Users - List",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/users",
+          "host": ["{{baseUrl}}"],
+          "path": ["users"]
+        }
+      }
+    },
+    {
+      "name": "Users - Get by ID",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/users/searchId/{{userId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "searchId", "{{userId}}"]
+        }
+      }
+    },
+    {
+      "name": "Users - Get by ID (KO invalid id)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/users/searchId/not-an-object-id",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "searchId", "not-an-object-id"]
+        }
+      }
+    },
+    {
+      "name": "Users - Get by Pseudo",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/users/searchPseudo/{{pseudo}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "searchPseudo", "{{pseudo}}"]
+        }
+      }
+    },
+    {
+      "name": "Users - Get by Email",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/users/searchEmail/{{email}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "searchEmail", "{{email}}"]
+        }
+      }
+    },
+    {
+      "name": "Users - Update",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pseudo\": \"{{pseudoUpdated}}\",\n  \"email\": \"{{emailUpdated}}\",\n  \"password\": \"{{passwordUpdated}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users/{{userId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "{{userId}}"]
+        }
+      }
+    },
+    {
+      "name": "Users - Delete",
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/users/{{userId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "{{userId}}"]
+        }
+      }
+    },
+    {
+      "name": "Auth - Login (OK)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 or 200', function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});",
+              "",
+              "const token = pm.response.text();",
+              "if (token && token.length > 0) {",
+              "  pm.collectionVariables.set('authToken', token);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "Auth - Login (KO invalid credentials)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"WrongPass1!\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "Auth - Test JWT",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/test",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "test"]
+        }
+      }
+    },
+    {
+      "name": "Auth - Test JWT (KO no token)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/auth/test",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "test"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "authToken", "value": "" }
+  ]
+}
