@@ -4,28 +4,32 @@ Contrat de routes **en Markdown** pour intégration front/back.
 
 > Source: routes réellement présentes dans `UserController` et `AuthController`.
 
-## Base paths
+## Base URLs
 
-- `AUTH_BASEPATH_TRAEFIK = "/api/auth"`
-- `AUTH_BASEPATH_DIRECT = ""` (backend direct sans préfixe global supplémentaire)
-
-Exemples:
-- URL Traefik login: `/api/auth/auth/login`
-- URL directe login (origin `http://localhost:3000`): `http://localhost:3000/auth/login`
+- Via Traefik: `http://localhost/api/auth`
+- Direct (debug): `http://localhost:3000` (valeur par défaut via `process.env.PORT ?? 3000`; TODO: ajuster si `PORT` différent en environnement local)
+- StripPrefix: Traefik retire le préfixe `/api/auth` avant de forward au service, donc une route backend `/auth/login` devient `/api/auth/auth/login` côté entrée gateway.
 
 ## Table des routes
 
-| Key | Method | Direct path (backend) | Via Traefik | JWT requis | Params | Body |
-|---|---|---|---|---|---|---|
-| `auth.login` | `POST` | `/auth/login` | `/api/auth/auth/login` | non | - | `LoginRequest` |
-| `auth.test` | `GET` | `/auth/test` | `/api/auth/auth/test` | oui | - | - |
-| `users.create` | `POST` | `/users` | `/api/auth/users` | non | - | `CreateUserRequest` |
-| `users.list` | `GET` | `/users` | `/api/auth/users` | non | - | - |
-| `users.getById` | `GET` | `/users/searchId/:id` | `/api/auth/users/searchId/:id` | non | `id` | - |
-| `users.getByPseudo` | `GET` | `/users/searchPseudo/:pseudo` | `/api/auth/users/searchPseudo/:pseudo` | non | `pseudo` | - |
-| `users.getByEmail` | `GET` | `/users/searchEmail/:email` | `/api/auth/users/searchEmail/:email` | non | `email` | - |
-| `users.update` | `PATCH` | `/users/:id` | `/api/auth/users/:id` | non | `id` | `UpdateUserRequest` |
-| `users.delete` | `DELETE` | `/users/:id` | `/api/auth/users/:id` | non | `id` | - |
+| Key | Method | Direct path (backend) | Via Traefik | Access | Impact JWT | Params | Body |
+|---|---|---|---|---|---|---|---|
+| `auth.login` | `POST` | `/auth/login` | `/api/auth/auth/login` | Public | Retourne le token JWT comme **chaîne brute** (response body = token string) | - | `LoginRequest` |
+| `auth.test` | `GET` | `/auth/test` | `/api/auth/auth/test` | Protected | Nécessite Bearer valide; la stratégie JWT extrait `Authorization: Bearer <token>` et expose le payload dans `req.user` | - | - |
+| `users.create` | `POST` | `/users` | `/api/auth/users` | Public | Aucun usage JWT dans cette route | - | `CreateUserRequest` |
+| `users.list` | `GET` | `/users` | `/api/auth/users` | Public | Aucun usage JWT dans cette route | - | - |
+| `users.getById` | `GET` | `/users/searchId/:id` | `/api/auth/users/searchId/:id` | Public | Aucun usage JWT dans cette route | `id` | - |
+| `users.getByPseudo` | `GET` | `/users/searchPseudo/:pseudo` | `/api/auth/users/searchPseudo/:pseudo` | Public | Aucun usage JWT dans cette route | `pseudo` | - |
+| `users.getByEmail` | `GET` | `/users/searchEmail/:email` | `/api/auth/users/searchEmail/:email` | Public | Aucun usage JWT dans cette route | `email` | - |
+| `users.update` | `PATCH` | `/users/:id` | `/api/auth/users/:id` | Public | Aucun usage JWT dans cette route | `id` | `UpdateUserRequest` |
+| `users.delete` | `DELETE` | `/users/:id` | `/api/auth/users/:id` | Public | Aucun usage JWT dans cette route | `id` | - |
+
+## JWT usage for other services
+
+- Claim canonique user id: `_id` (voir section **JWT Contract** dans `FEATURES.md`).
+- Les services aval devraient utiliser cette claim comme `ownerId` interne.
+- Règle d’intégration: ne pas envoyer `ownerId/userId` en clair dans body/query quand il peut être dérivé du JWT validé.
+- TODO gateway: faire confiance à l’identité uniquement quand la validation de token est garantie en amont (Traefik/gateway).
 
 ## Interfaces (échanges front/back)
 

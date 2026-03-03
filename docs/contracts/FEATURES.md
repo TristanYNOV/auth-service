@@ -23,6 +23,68 @@ Ce fichier résume l’état **réel** du backend `auth-service` tel qu’implé
   - `JWT_EXPIRES_IN` (fallback `30d`)
 - Port d’écoute applicatif : `process.env.PORT ?? 3000`.
 
+## JWT Contract
+
+- **Format d’envoi attendu**: `Authorization: Bearer <token>`.
+- **Algorithme de signature**:
+  - Le code ne force pas explicitement `algorithm` dans `JwtModule.register(...)`.
+  - En pratique, c’est l’algorithme par défaut de `jsonwebtoken` qui s’applique (TODO: figer explicitement l’algo dans la config pour lever toute ambiguïté contractuelle).
+- **Clé de signature / validation**:
+  - Configurée via `process.env.JWT_SECRET` avec fallback `'secret'` dans `AuthModule`.
+  - Validation JWT utilise la même variable `JWT_SECRET` (même fallback) dans `JwtStrategy`.
+- **Durée de vie**:
+  - `expiresIn: process.env.JWT_EXPIRES_IN || '30d'`.
+  - Claims temporelles ajoutées par la librairie: `iat` et `exp`.
+- **Refresh token**: absent dans le code actuel.
+
+### Claims présentes dans le payload
+
+Source de construction du payload:
+- Le service auth charge l’utilisateur par email.
+- Il retire uniquement `password` puis signe le reste (`jwtService.sign(user)`).
+
+Claims documentées de façon factuelle:
+- `_id`: `string` (ObjectId sérialisé) — identifiant Mongo de l’utilisateur.
+- `pseudo`: `string` — pseudo utilisateur.
+- `email`: `string` — email utilisateur.
+- `iat`: `number` (timestamp Unix secondes) — date d’émission du token.
+- `exp`: `number` (timestamp Unix secondes) — date d’expiration du token.
+
+TODO (non spéculatif):
+- Le code signe un objet issu d’un document Mongoose étalé (`{ ...findUser }`). La présence exacte/garantie d’éventuels champs additionnels non métier n’est pas contractualisée explicitement dans le code.
+
+### Identité utilisateur canonique (inter-services)
+
+- **Claim canonique à utiliser comme `userId`**: `_id`.
+- `sub` n’est pas défini dans l’implémentation actuelle.
+- Recommandation d’évolution: TODO standardiser vers `sub` plus tard, sans casser la compatibilité.
+
+### Exemple de payload JWT décodé (valeurs fictives)
+
+```json
+{
+  "_id": "6750d39841f6fa572ff14549",
+  "pseudo": "coach42",
+  "email": "coach42@example.com",
+  "iat": 1734000000,
+  "exp": 1736592000
+}
+```
+
+### Règles d’utilisation inter-services
+
+- Ne jamais envoyer `userId` en clair dans le body/query quand il peut être dérivé du JWT validé.
+- Les services aval doivent faire confiance à l’identité **uniquement** si le token a déjà été validé en amont.
+- TODO: la validation centralisée au gateway/Traefik est prévue plus tard; en attendant, chaque service protégé doit valider le JWT côté application.
+
+## Security notes (MVP)
+
+- TODO: imposer `JWT_SECRET` obligatoire hors dev (supprimer fallback `'secret'`).
+- TODO: fixer explicitement l’algorithme JWT côté config.
+- TODO: ajouter refresh token + stratégie de rotation/révocation.
+- TODO: ajouter rate limiting / anti-bruteforce sur `POST /auth/login` (idéalement au gateway).
+- TODO: éviter l’exposition de données sensibles (`password` hash) dans certaines réponses utilisateurs.
+
 ## Not implemented / Missing
 
 Priorité haute (MVP attendu):
