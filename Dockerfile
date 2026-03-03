@@ -1,38 +1,27 @@
-# Étape 1 : Construction de l'application
-FROM node:22 AS builder
+# syntax=docker/dockerfile:1
 
-# Définition du dossier de travail
+FROM node:22-alpine AS base
 WORKDIR /usr/src/app
 
-# Copie des fichiers nécessaires
-COPY package.json package-lock.json .env ./
+FROM base AS deps
+COPY package*.json ./
+RUN npm ci
 
-# Installation des dépendances
-RUN npm install --legacy-peer-deps
-
-# Copie du code source
+FROM deps AS builder
 COPY . .
-
-# Compilation du projet
 RUN npm run build
 
-# Étape 2 : Exécution de l'application en production
-FROM node:22 AS runner
-
+FROM node:22-alpine AS runner
 WORKDIR /usr/src/app
+ENV NODE_ENV=production
 
-# Copie du build depuis l’étape précédente
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
 COPY --from=builder /usr/src/app/dist ./dist
-COPY package.json package-lock.json ./
 
-# Réinstallation des dépendances en mode production uniquement
-RUN npm install --only=production
+RUN addgroup -S nodejs && adduser -S nestjs -G nodejs
+USER nestjs
 
-# Définition de la variable d'environnement
-ENV NODE_ENV=development
-
-# Exposition du port de l'API
 EXPOSE 3000
-
-# Commande de démarrage de l'application
 CMD ["node", "dist/main.js"]

@@ -1,18 +1,18 @@
-import { Schema, Prop, SchemaFactory } from "@nestjs/mongoose";
-import { IsEmail, IsNotEmpty, IsStrongPassword } from "class-validator";
+import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
+import { IsEmail, IsNotEmpty, IsStrongPassword } from 'class-validator';
 
-@Schema({versionKey: false})
+@Schema({ versionKey: false })
 export class User {
-  @Prop({required: true})
+  @Prop({ required: true })
   @IsNotEmpty()
-  pseudo: string
+  pseudo: string;
 
-  @Prop({unique:true, required: true})
+  @Prop({ unique: true, required: true })
   @IsNotEmpty()
   @IsEmail()
   email: string;
 
-  @Prop({required: true, immutable: true})
+  @Prop({ required: true, immutable: true })
   @IsStrongPassword()
   password: string;
 }

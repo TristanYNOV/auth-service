@@ -1,0 +1,283 @@
+{
+  "info": {
+    "name": "auth-service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const useTraefik = String(pm.environment.get('useTraefik') || 'false').toLowerCase() === 'true';",
+          "const baseUrlTraefik = pm.environment.get('baseUrlTraefik') || 'http://localhost/api/auth';",
+          "const baseUrlDirect = pm.environment.get('baseUrlDirect') || 'http://localhost:3000';",
+          "pm.environment.set('baseUrl', useTraefik ? baseUrlTraefik : baseUrlDirect);",
+          "",
+          "const token = pm.collectionVariables.get('accessTokenUser') || pm.environment.get('accessTokenUser');",
+          "if (token) {",
+          "  pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${token}` });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Register",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const email = pm.variables.replaceIn('{{$randomEmail}}');",
+              "const password = pm.variables.replaceIn('{{$randomPassword}}');",
+              "const pseudo = pm.variables.replaceIn('{{$randomUserName}}');",
+              "const firstName = pm.variables.replaceIn('{{$randomFirstName}}');",
+              "const lastName = pm.variables.replaceIn('{{$randomLastName}}');",
+              "",
+              "const strongPassword = `${password}A1!`;",
+              "",
+              "pm.collectionVariables.set('auth_email', email);",
+              "pm.collectionVariables.set('auth_password', strongPassword);",
+              "pm.collectionVariables.set('auth_pseudo', pseudo);",
+              "pm.collectionVariables.set('first_name', firstName);",
+              "pm.collectionVariables.set('last_name', lastName);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.id) pm.collectionVariables.set('createdUserId', json.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pseudo\": \"{{auth_pseudo}}\",\n  \"email\": \"{{auth_email}}\",\n  \"password\": \"{{auth_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users"
+          ]
+        }
+      }
+    },
+    {
+      "name": "SignIn",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const token = pm.response.text();",
+              "if (token) {",
+              "  pm.collectionVariables.set('accessTokenUser', token);",
+              "  pm.environment.set('accessTokenUser', token);",
+              "}",
+              "",
+              "function decodeBase64Url(input) {",
+              "  const normalized = input.replace(/-/g, '+').replace(/_/g, '/');",
+              "  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);",
+              "  return atob(padded);",
+              "}",
+              "",
+              "if (token && token.split('.').length === 3) {",
+              "  const payload = JSON.parse(decodeBase64Url(token.split('.')[1]));",
+              "  pm.collectionVariables.set('userId', payload.sub || '');",
+              "  pm.collectionVariables.set('auth_email', payload.email || pm.collectionVariables.get('auth_email') || '');",
+              "  pm.collectionVariables.set('auth_pseudo', payload.pseudo || pm.collectionVariables.get('auth_pseudo') || '');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{auth_email}}\",\n  \"password\": \"{{auth_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Me - Get",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Me - Patch",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const updatedPseudo = `${pm.collectionVariables.get('auth_pseudo') || pm.variables.replaceIn('{{$randomUserName}}')}_updated`;",
+              "pm.collectionVariables.set('auth_pseudo', updatedPseudo);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pseudo\": \"{{auth_pseudo}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Me - Delete",
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Session - Logout (clear token)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.unset('accessTokenUser');",
+              "pm.collectionVariables.unset('userId');",
+              "pm.environment.unset('accessTokenUser');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "auth_email",
+      "value": ""
+    },
+    {
+      "key": "auth_password",
+      "value": ""
+    },
+    {
+      "key": "auth_pseudo",
+      "value": ""
+    },
+    {
+      "key": "first_name",
+      "value": ""
+    },
+    {
+      "key": "last_name",
+      "value": ""
+    },
+    {
+      "key": "createdUserId",
+      "value": ""
+    },
+    {
+      "key": "accessTokenUser",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  auth_db:
+    image: mongo:7
+    container_name: auth_db
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - auth_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand({ ping: 1 }).ok\" | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - auth_net
+
+  auth-service:
+    build:
+      context: .
+    container_name: auth_service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${PORT:-3000}
+      DATABASE_URL: ${DATABASE_URL:-mongodb://auth_db:27017}
+      DB_NAME: ${DB_NAME:-auth}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
+    ports:
+      - '3000:3000'
+    depends_on:
+      auth_db:
+        condition: service_healthy
+    networks:
+      - auth_net
+
+volumes:
+  auth_mongo_data:
+
+networks:
+  auth_net:
+    driver: bridge
