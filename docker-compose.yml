@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   auth_db:
-    image: mongo:7
+    image: mongo:latest
     container_name: auth_db
     restart: unless-stopped
     ports:
