@@ -1,134 +1,54 @@
 {
   "info": {
-    "_postman_id": "4db3fce4-cb48-4e36-9010-f8f1cbf11111",
     "name": "auth-service",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Collection basée sur les endpoints réellement présents dans auth-service."
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const useTraefik = String(pm.environment.get('useTraefik') || 'false').toLowerCase() === 'true';",
+          "const baseUrlTraefik = pm.environment.get('baseUrlTraefik') || 'http://localhost/api/auth';",
+          "const baseUrlDirect = pm.environment.get('baseUrlDirect') || 'http://localhost:3000';",
+          "pm.environment.set('baseUrl', useTraefik ? baseUrlTraefik : baseUrlDirect);",
+          "",
+          "const token = pm.environment.get('accessTokenUser');",
+          "if (token) {",
+          "  pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${token}` });",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
     {
-      "name": "Users - Create (OK)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"pseudo\": \"{{pseudo}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/users",
-          "host": ["{{baseUrl}}"],
-          "path": ["users"]
-        }
-      }
-    },
-    {
-      "name": "Users - Create (KO validation)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"pseudo\": \"\",\n  \"email\": \"not-an-email\",\n  \"password\": \"weak\",\n  \"extra\": \"forbidden\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/users",
-          "host": ["{{baseUrl}}"],
-          "path": ["users"]
-        }
-      }
-    },
-    {
-      "name": "Users - List",
+      "name": "Health",
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/users",
+          "raw": "{{baseUrl}}/health",
           "host": ["{{baseUrl}}"],
-          "path": ["users"]
+          "path": ["health"]
         }
       }
     },
     {
-      "name": "Users - Get by ID",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/users/searchId/{{userId}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["users", "searchId", "{{userId}}"]
-        }
-      }
-    },
-    {
-      "name": "Users - Get by ID (KO invalid id)",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/users/searchId/not-an-object-id",
-          "host": ["{{baseUrl}}"],
-          "path": ["users", "searchId", "not-an-object-id"]
-        }
-      }
-    },
-    {
-      "name": "Users - Get by Pseudo",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/users/searchPseudo/{{pseudo}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["users", "searchPseudo", "{{pseudo}}"]
-        }
-      }
-    },
-    {
-      "name": "Users - Get by Email",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/users/searchEmail/{{email}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["users", "searchEmail", "{{email}}"]
-        }
-      }
-    },
-    {
-      "name": "Users - Update",
-      "request": {
-        "method": "PATCH",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"pseudo\": \"{{pseudoUpdated}}\",\n  \"email\": \"{{emailUpdated}}\",\n  \"password\": \"{{passwordUpdated}}\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/users/{{userId}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["users", "{{userId}}"]
-        }
-      }
-    },
-    {
-      "name": "Users - Delete",
-      "request": {
-        "method": "DELETE",
-        "url": {
-          "raw": "{{baseUrl}}/users/{{userId}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["users", "{{userId}}"]
-        }
-      }
-    },
-    {
-      "name": "Auth - Login (OK)",
+      "name": "Register",
       "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const ts = Date.now();",
+              "pm.environment.set('userPseudo', `user_${ts}`);",
+              "pm.environment.set('userEmail', `user_${ts}@example.com`);",
+              "pm.environment.set('userPassword', 'StrongPass1!');"
+            ]
+          }
+        },
         {
           "listen": "test",
           "script": {
@@ -137,10 +57,12 @@
               "pm.test('Status is 201 or 200', function () {",
               "  pm.expect([200, 201]).to.include(pm.response.code);",
               "});",
-              "",
-              "const token = pm.response.text();",
-              "if (token && token.length > 0) {",
-              "  pm.collectionVariables.set('authToken', token);",
+              "const json = pm.response.json();",
+              "pm.test('Register response has no password', function () {",
+              "  pm.expect(json.password).to.equal(undefined);",
+              "});",
+              "if (json && json.id) {",
+              "  pm.environment.set('createdUserId', json.id);",
               "}"
             ]
           }
@@ -153,17 +75,46 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+          "raw": "{\n  \"pseudo\": \"{{userPseudo}}\",\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/auth/login",
+          "raw": "{{baseUrl}}/users",
           "host": ["{{baseUrl}}"],
-          "path": ["auth", "login"]
+          "path": ["users"]
         }
       }
     },
     {
-      "name": "Auth - Login (KO invalid credentials)",
+      "name": "Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201 or 200', function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});",
+              "",
+              "const token = pm.response.text();",
+              "if (token) pm.environment.set('accessTokenUser', token);",
+              "",
+              "function decodeBase64Url(input) {",
+              "  const normalized = input.replace(/-/g, '+').replace(/_/g, '/');",
+              "  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);",
+              "  return atob(padded);",
+              "}",
+              "",
+              "if (token && token.split('.').length === 3) {",
+              "  const payload = JSON.parse(decodeBase64Url(token.split('.')[1]));",
+              "  pm.environment.set('userId', payload.sub || '');",
+              "  pm.environment.set('userEmail', payload.email || '');",
+              "  pm.environment.set('userPseudo', payload.pseudo || '');",
+              "}"
+            ]
+          }
+        }
+      ],
       "request": {
         "method": "POST",
         "header": [
@@ -171,7 +122,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"WrongPass1!\"\n}"
+          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/auth/login",
@@ -181,35 +132,95 @@
       }
     },
     {
-      "name": "Auth - Test JWT",
+      "name": "Me - Get",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Response has no password', function () {",
+              "  pm.expect(json.password).to.equal(undefined);",
+              "});"
+            ]
+          }
+        }
+      ],
       "request": {
         "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{authToken}}"
-          }
-        ],
         "url": {
-          "raw": "{{baseUrl}}/auth/test",
+          "raw": "{{baseUrl}}/me",
           "host": ["{{baseUrl}}"],
-          "path": ["auth", "test"]
+          "path": ["me"]
         }
       }
     },
     {
-      "name": "Auth - Test JWT (KO no token)",
+      "name": "Me - Patch",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Response has no password', function () {",
+              "  pm.expect(json.password).to.equal(undefined);",
+              "});"
+            ]
+          }
+        }
+      ],
       "request": {
-        "method": "GET",
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pseudo\": \"{{userPseudo}}_updated\"\n}"
+        },
         "url": {
-          "raw": "{{baseUrl}}/auth/test",
+          "raw": "{{baseUrl}}/me",
           "host": ["{{baseUrl}}"],
-          "path": ["auth", "test"]
+          "path": ["me"]
+        }
+      }
+    },
+    {
+      "name": "Me - Delete",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Deleted user has no password', function () {",
+              "  pm.expect(json.user && json.user.password).to.equal(undefined);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/me",
+          "host": ["{{baseUrl}}"],
+          "path": ["me"]
         }
       }
     }
-  ],
-  "variable": [
-    { "key": "authToken", "value": "" }
   ]
 }
