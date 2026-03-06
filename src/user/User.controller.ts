@@ -20,8 +20,7 @@ import { encryptPassword } from '../utils/bcrypt';
 import { toUserPublicDto, UserPublicDto } from './dto/UserPublic.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 function checkIDParam(id: string): void {
   const isValid = mongoose.Types.ObjectId.isValid(id);
@@ -40,13 +39,6 @@ function canManageUser(
   const isSelf = req.user.sub === targetUserId;
 
   return isAdmin || isSelf;
-}
-
-function ensureAdminAccess(req: AuthenticatedRequest): void {
-  const isAdmin = req.user.roles.includes('admin');
-  if (!isAdmin) {
-    throw new ForbiddenException('Admin role is required for this endpoint');
-  }
 }
 
 @Controller('users')
@@ -68,23 +60,16 @@ export class UserController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  async getAllUser(@Req() req: AuthenticatedRequest): Promise<UserPublicDto[]> {
-    ensureAdminAccess(req);
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  async getAllUser(): Promise<UserPublicDto[]> {
     const users = await this.userService.getAllUsers();
     return users.map((user) => toUserPublicDto(user));
   }
 
   @Get('searchId/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  async getUserById(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<UserPublicDto> {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  async getUserById(@Param('id') id: string): Promise<UserPublicDto> {
     checkIDParam(id);
-    ensureAdminAccess(req);
     const user = await this.userService.getUserById(id);
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
@@ -92,13 +77,10 @@ export class UserController {
   }
 
   @Get('searchPseudo/:pseudo')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   async getUserByPseudo(
     @Param('pseudo') pseudo: string,
-    @Req() req: AuthenticatedRequest,
   ): Promise<UserPublicDto> {
-    ensureAdminAccess(req);
     const user = await this.userService.getUserByPseudo(pseudo);
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
@@ -106,13 +88,8 @@ export class UserController {
   }
 
   @Get('searchEmail/:email')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  async getUserByEmail(
-    @Param('email') email: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<UserPublicDto> {
-    ensureAdminAccess(req);
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  async getUserByEmail(@Param('email') email: string): Promise<UserPublicDto> {
     const user = await this.userService.getUserByEmail(email);
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 

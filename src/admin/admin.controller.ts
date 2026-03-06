@@ -7,17 +7,14 @@ import {
   HttpStatus,
   Param,
   Patch,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import mongoose from 'mongoose';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 import { AdminService } from './admin.service';
 import { toUserPublicDto, UserPublicDto } from '../user/dto/UserPublic.dto';
 import { AdminUpdateUserDto } from './dto/AdminUpdateUser.dto';
-import { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
 import { encryptPassword } from '../utils/bcrypt';
 
 function checkIDParam(id: string): void {
@@ -29,26 +26,13 @@ function checkIDParam(id: string): void {
     );
 }
 
-function ensureAdminAccess(req: AuthenticatedRequest): void {
-  if (!req.user.roles.includes('admin')) {
-    throw new HttpException(
-      'Admin role is required for this endpoint',
-      HttpStatus.FORBIDDEN,
-    );
-  }
-}
-
 @Controller('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin')
+@UseGuards(JwtAuthGuard, AdminRoleGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('users')
-  async getAllUsers(
-    @Req() req: AuthenticatedRequest,
-  ): Promise<UserPublicDto[]> {
-    ensureAdminAccess(req);
+  async getAllUsers(): Promise<UserPublicDto[]> {
     const users = await this.adminService.getAllUsers();
 
     return users.map((user) => toUserPublicDto(user));
@@ -58,10 +42,8 @@ export class AdminController {
   async updateUser(
     @Param('id') id: string,
     @Body() adminUpdateUserDto: AdminUpdateUserDto,
-    @Req() req: AuthenticatedRequest,
   ): Promise<UserPublicDto> {
     checkIDParam(id);
-    ensureAdminAccess(req);
 
     const payload: AdminUpdateUserDto = { ...adminUpdateUserDto };
     if (payload.password) {
@@ -79,10 +61,8 @@ export class AdminController {
   @Delete('users/:id')
   async deleteUser(
     @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
   ): Promise<{ user: UserPublicDto; message: string }> {
     checkIDParam(id);
-    ensureAdminAccess(req);
 
     const user = await this.adminService.deleteUserById(id);
     if (!user) {
