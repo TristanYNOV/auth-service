@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthPayloadDto } from './dto/auth.dto';
 import { UserService } from '../user/User.service';
 import { JwtService } from '@nestjs/jwt';
@@ -17,7 +17,9 @@ export class AuthService {
       user.email,
     );
     if (!findUser) {
-      throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
+      throw new UnauthorizedException(
+        'Unauthorized: invalid credentials or user not found.',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -25,13 +27,16 @@ export class AuthService {
       findUser.password,
     );
     if (!isPasswordValid) {
-      throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
+      throw new UnauthorizedException(
+        'Unauthorized: invalid credentials or user not found.',
+      );
     }
 
     const payload: JwtPayload = {
-      sub: String(findUser._id),
+      sub: findUser._id.toString(),
       pseudo: findUser.pseudo,
       email: findUser.email,
+      roles: findUser.roles,
     };
 
     return this.jwtService.sign(payload);

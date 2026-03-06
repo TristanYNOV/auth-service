@@ -1,46 +1,57 @@
 # FEATURES
 
-## Implemented (P0)
+## Implemented
 
 ### Public
 - `GET /health`
+- `POST /users` (register, always creates roles=`['user']`)
 - `POST /auth/login`
-- `POST /users` (register)
 
-### Protected (JWT)
+### Protected (JWT + role `user`)
 - `GET /me`
 - `PATCH /me`
 - `DELETE /me`
 
-### Legacy routes still present (temporary)
-- `GET /users`
-- `GET /users/searchId/:id`
-- `GET /users/searchPseudo/:pseudo`
-- `GET /users/searchEmail/:email`
-- `PATCH /users/:id`
-- `DELETE /users/:id`
+### Protected (JWT + role `admin`)
+- `GET /admin/users`
+- `PATCH /admin/users/:id`
+- `DELETE /admin/users/:id`
 
-### Removed
-- `GET /auth/test`
+## Security model
 
-## Security and data exposure
+- User document includes `roles: ('user' | 'admin')[]`.
+- Registration ignores any client-provided `roles` and forces `['user']` server-side.
+- `/admin/*` is fail-closed with RBAC (`RolesGuard`):
+  - no token => 401
+  - user token => 403
+  - admin token => 200
+- `/me` is user-only.
+- Legacy `/users` read/update/delete routes were removed to reduce attack surface.
 
-- `password` is never returned by API responses.
-- Public user output contract is sanitized through `UserPublicDto`:
-  - `id`
-  - `pseudo`
-  - `email`
-- `PATCH /me` and `DELETE /me` are self-only and use JWT identity (`req.user.sub`).
+## Unique admin bootstrap (always active)
 
-## JWT contract (current source of truth)
+On startup:
+- if admin count = `1`: keep running
+- if admin count = `0`: create admin from `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_PSEUDO` (`admin` by default)
+- if admin count `> 1`: fail-fast with:
+  - `Invalid state: multiple admin users found. Expected exactly one.`
 
-- Bearer format: `Authorization: Bearer <token>`.
-- Canonical identity claim: `sub` (`string`).
-- Guaranteed claims in the access token payload:
-  - `sub`
-  - `email`
-  - `pseudo`
-  - `iat`
-  - `exp`
-- `_id` is not included in JWT payload.
-- Refresh token is not part of this P0 scope.
+Rules:
+- no promote endpoint
+- no automatic promotion
+- existing admin is never overwritten/reset from `.env`
+
+## JWT contract
+
+JWT payload includes:
+- `sub`
+- `email`
+- `pseudo`
+- `roles`
+- `iat`
+- `exp`
+
+## Login failure message
+
+`POST /auth/login` returns 401 with this exact message for invalid email or password:
+- `Unauthorized: invalid credentials or user not found.`

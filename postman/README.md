@@ -1,50 +1,49 @@
-# Postman kit - auth-service (P0)
+# Postman kit - auth-service
 
-## Fichiers
+## Files
 
-- `auth-service.postman_collection.json`
-- `auth-service.local.postman_environment.json`
+- `auth-service.postman_collection.json` (single collection)
+- `env.direct.json`
+- `env.traefik.json`
 
-## Variables principales
+## Collection structure
 
-- `useTraefik` (`true`|`false`)
-- `baseUrlTraefik` (`http://localhost/api/auth`)
-- `baseUrlDirect` (`http://localhost:3000`)
-- `baseUrl` (calculée automatiquement)
-- `auth_email`, `auth_password`, `auth_pseudo`
-- `first_name`, `last_name`
-- `accessTokenUser`, `userId`, `createdUserId`
+- Folder `User`
+  - Health
+  - Register
+  - Login (user)
+  - Me (GET/PATCH/DELETE)
+- Folder `Admin`
+  - Admin - Login
+  - Admin - List Users
+  - Admin - Patch User
+  - Admin - Delete User
+  - Admin - User tries admin (expect 403)
 
-## Scripts (orientés parcours utilisateur)
+## Environment variables
 
-- Collection pre-request
-  - calcule `baseUrl` selon `useTraefik`
-  - injecte automatiquement `Authorization: Bearer ...` si token présent
-  - nettoie automatiquement les formats invalides courants:
-    - token préfixé par `Bearer `
-    - token entouré de guillemets (`"..."`)
-- Register pre-request
-  - génère des valeurs aléatoires pertinentes via variables dynamiques Postman:
-    - `{{$randomEmail}}`, `{{$randomPassword}}`, `{{$randomUserName}}`, `{{$randomFirstName}}`, `{{$randomLastName}}`
-  - renforce le mot de passe généré (`+ A1!`)
-  - stocke les valeurs en `collectionVariables`
-- SignIn test script
-  - sauvegarde le JWT nettoyé dans `accessTokenUser`
-  - vérifie que le token est bien un JWT utilisable (3 segments)
-  - décode le payload JWT et sauvegarde `userId = sub`, `auth_email`, `auth_pseudo`
-- Me - Get test script
-  - logge le header `Authorization` envoyé
-  - logge `accessTokenUser` masqué
-  - échoue explicitement si le header `Authorization` est absent/mal formé
-- Session - Logout (clear token)
-  - supprime `accessTokenUser` et `userId` pour simuler une déconnexion
+Both environments include:
+- `useTraefik`
+- `baseUrlTraefik`
+- `baseUrlDirect`
+- `adminEmail`
+- `adminPassword`
 
-## Parcours recommandé
+Defaults are aligned with `.env.example`.
 
-1. `Health`
-2. `Register`
-3. `SignIn`
-4. `Me - Get`
-5. `Me - Patch`
-6. `Me - Delete`
-7. `Session - Logout (clear token)`
+## Scripts
+
+- Collection pre-request:
+  - computes `baseUrl` from `useTraefik`
+  - auto-injects bearer token
+    - `Admin - ...` requests use `accessTokenAdmin`
+    - all others use `accessTokenUser`
+- Register pre-request:
+  - randomizes `userEmail`, `userPseudo`, `userPassword`
+- Login (user) tests:
+  - stores `accessTokenUser`
+  - decodes payload and stores `userId = sub`
+- Admin - Login tests:
+  - stores `accessTokenAdmin`
+  - decodes payload and stores `adminUserId = sub`
+  - asserts `roles` contains `admin`

@@ -11,10 +11,30 @@ export class UserService {
     @InjectModel(User.name) private readonly userModel: Model<User>,
   ) {}
 
-  createUser(createUserDto: CreateUserDto) {
-    const newUser = new this.userModel(createUserDto);
+  createUser(createUserDto: CreateUserDto & { roles?: string[] }) {
+    const newUser = new this.userModel({
+      ...createUserDto,
+      roles: ['user'],
+    });
 
     return newUser.save();
+  }
+
+  createAdminUser(payload: {
+    pseudo: string;
+    email: string;
+    password: string;
+  }) {
+    const newAdmin = new this.userModel({
+      ...payload,
+      roles: ['admin'],
+    });
+
+    return newAdmin.save();
+  }
+
+  countAdminUsers() {
+    return this.userModel.countDocuments({ roles: { $in: ['admin'] } }).exec();
   }
 
   getAllUsers() {
@@ -25,56 +45,21 @@ export class UserService {
     return this.userModel.findById(id).select('-password').lean();
   }
 
-  async getUserByEmail(email: string) {
-    try {
-      const response = await this.userModel
-        .findOne({ email })
-        .select('-password')
-        .lean()
-        .exec();
-      if (!response)
-        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-
-      return response;
-    } catch {
-      throw new HttpException(
-        'Failed to get user by email',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-  }
-
   getUserByEmailWithPassword(email: string) {
     return this.userModel.findOne({ email }).exec();
   }
 
-  async getUserByPseudo(pseudo: string) {
+  async updateUser(id: string, updateUserDto: UpdateUserDto) {
     try {
-      const response = await this.userModel
-        .findOne({ pseudo })
-        .select('-password')
-        .lean()
-        .exec();
-      if (!response)
-        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-
-      return response;
+      return await this.userModel.findByIdAndUpdate(id, updateUserDto, {
+        new: true,
+        lean: true,
+        overwriteImmutable: true,
+        projection: { password: 0 },
+      });
     } catch {
-      throw new HttpException(
-        'Failed to get user by alias',
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
     }
-  }
-
-  // TODO: Manage immutable Password better with dto (maybe new route for update userPassword)
-  updateUSer(id: string, updateUserDto: UpdateUserDto) {
-    return this.userModel.findByIdAndUpdate(id, updateUserDto, {
-      new: true,
-      lean: true,
-      overwriteImmutable: true,
-      projection: { password: 0 },
-    });
   }
 
   deleteUserById(id: string) {
