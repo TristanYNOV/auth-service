@@ -6,6 +6,7 @@
 - `GET /health`
 - `POST /auth/login`
 - `POST /users` (register, roles forced to `['user']`)
+- `POST /auth/login` only checks submitted credentials (email/password) against stored account data; no RBAC check is applied at login time.
 
 ### Protected (JWT, self-service)
 - `GET /me`

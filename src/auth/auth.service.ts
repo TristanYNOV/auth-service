@@ -14,7 +14,7 @@ export class AuthService {
 
   async validateUser(user: AuthPayloadDto): Promise<string> {
     const findUser = await this.userService.getUserByEmailWithPassword(
-      user.email.toLowerCase(),
+      user.email,
     );
     if (!findUser) {
       throw new HttpException(

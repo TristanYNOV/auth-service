@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsStrongPassword } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 import { Prop } from '@nestjs/mongoose';
 
 export class AuthPayloadDto {
@@ -7,6 +7,7 @@ export class AuthPayloadDto {
   @Prop({ unique: true, required: true })
   email: string;
 
-  @IsStrongPassword({ minLength: 8, minUppercase: 1, minNumbers: 1 })
+  @IsString()
+  @IsNotEmpty()
   password: string;
 }

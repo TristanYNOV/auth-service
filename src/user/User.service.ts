@@ -8,6 +8,10 @@ import { UserRole } from '../auth/types/role.type';
 
 export type CreateUserInput = CreateUserDto & { roles?: UserRole[] };
 
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 @Injectable()
 export class UserService {
   constructor(
@@ -48,8 +52,19 @@ export class UserService {
     }
   }
 
-  getUserByEmailWithPassword(email: string): Promise<UserDocument | null> {
-    return this.userModel.findOne({ email }).exec();
+  async getUserByEmailWithPassword(
+    email: string,
+  ): Promise<UserDocument | null> {
+    const exactMatch = await this.userModel.findOne({ email }).exec();
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const escapedEmail = escapeRegExp(email.trim());
+
+    return this.userModel
+      .findOne({ email: { $regex: `^${escapedEmail}$`, $options: 'i' } })
+      .exec();
   }
 
   async getUserByPseudo(pseudo: string): Promise<User> {
@@ -119,21 +134,6 @@ export class UserService {
           pseudo,
         },
         $addToSet: { roles: 'admin' },
-      },
-    );
-  }
-  async updatePasswordAndPseudoByEmail(
-    email: string,
-    hashedPassword: string,
-    pseudo: string,
-  ): Promise<void> {
-    await this.userModel.updateOne(
-      { email },
-      {
-        $set: {
-          password: hashedPassword,
-          pseudo,
-        },
       },
     );
   }
