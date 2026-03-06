@@ -5,19 +5,23 @@
 | Method | Path | Auth | Description | Response |
 |---|---|---:|---|---|
 | GET | `/health` | No | Healthcheck | `{ status: "ok", timestamp? }` |
-| POST | `/users` | No | Register user | `UserPublicDto` |
-| POST | `/auth/login` | No | Login user | `string` (JWT) |
-| GET | `/me` | Yes | Current user profile (self) | `UserPublicDto` |
-| PATCH | `/me` | Yes | Update current user (self) | `UserPublicDto` |
-| DELETE | `/me` | Yes | Delete current user (self) | `{ user: UserPublicDto, message }` |
-| GET | `/users` | No (legacy) | List users (temporary) | `UserPublicDto[]` |
-| GET | `/users/searchId/:id` | No (legacy) | Get user by id (temporary) | `UserPublicDto` |
-| GET | `/users/searchPseudo/:pseudo` | No (legacy) | Get user by pseudo (temporary) | `UserPublicDto` |
-| GET | `/users/searchEmail/:email` | No (legacy) | Get user by email (temporary) | `UserPublicDto` |
-| PATCH | `/users/:id` | No (legacy) | Update user by id (temporary) | `UserPublicDto` |
-| DELETE | `/users/:id` | No (legacy) | Delete user by id (temporary) | `{ user: UserPublicDto, message }` |
+| POST | `/users` | No | Register user (roles forced to `['user']`) | `UserPublicDto` |
+| POST | `/auth/login` | No | Login user/admin | `string` (JWT) |
+| GET | `/me` | JWT + role `user` | Current user profile (self) | `UserPublicDto` |
+| PATCH | `/me` | JWT + role `user` | Update current user (self) | `UserPublicDto` |
+| DELETE | `/me` | JWT + role `user` | Delete current user (self) | `{ user: UserPublicDto, message }` |
+| GET | `/admin/users` | JWT + role `admin` | List users | `UserPublicDto[]` |
+| PATCH | `/admin/users/:id` | JWT + role `admin` | Update user by id | `UserPublicDto` |
+| DELETE | `/admin/users/:id` | JWT + role `admin` | Delete user by id | `{ user: UserPublicDto, message }` |
 
-Removed route: `GET /auth/test`.
+## Removed routes (expected 404)
+
+- `GET /users`
+- `GET /users/searchId/:id`
+- `GET /users/searchPseudo/:pseudo`
+- `GET /users/searchEmail/:email`
+- `PATCH /users/:id`
+- `DELETE /users/:id`
 
 ## DTO contracts
 
@@ -49,12 +53,10 @@ All fields are optional; if provided, `password` is re-hashed server-side.
 
 ## JWT usage for other services
 
-- Validate JWT before trusting identity.
-- Canonical user id: `req.user.sub`.
-- Do not send user id in request body/query when JWT is available.
-- JWT claims contract for downstream services:
-  - `sub` (`string`)
-  - `email` (`string`)
-  - `pseudo` (`string`)
-  - `iat` (`number`)
-  - `exp` (`number`)
+JWT claims contract:
+- `sub` (`string`)
+- `email` (`string`)
+- `pseudo` (`string`)
+- `roles` (`('user'|'admin')[]`)
+- `iat` (`number`)
+- `exp` (`number`)

@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -7,19 +7,24 @@ import { randomUUID } from 'node:crypto';
 import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
 import { JwtGuard } from '../src/auth/guards/jwt.guard';
+import { RolesGuard } from '../src/auth/guards/roles.guard';
 import { LocalStrategy } from '../src/auth/strategies/local.strategy';
 import { JwtStrategy } from '../src/auth/strategies/jwt.strategy';
 import { MeController } from '../src/me.controller';
 import { UpdateUserDto } from '../src/schemas/UpdateUser.schema';
+import { AdminController } from '../src/admin/admin.controller';
 import { UserController } from '../src/user/User.controller';
 import { UserService } from '../src/user/User.service';
 import { CreateUserDto } from '../src/user/dto/CreateUser.dto';
+import { UserRole } from '../src/schemas/User.schema';
+import { encryptPassword } from '../src/utils/bcrypt';
 
 type StoredUser = {
   _id: string;
   email: string;
   pseudo: string;
   password: string;
+  roles: UserRole[];
 };
 
 function toPublicUser(user: StoredUser): Omit<StoredUser, 'password'> {
@@ -27,24 +32,55 @@ function toPublicUser(user: StoredUser): Omit<StoredUser, 'password'> {
     _id: user._id,
     email: user.email,
     pseudo: user.pseudo,
+    roles: user.roles,
   };
 }
 
 class InMemoryUserService {
   private readonly users = new Map<string, StoredUser>();
 
-  async createUser(createUserDto: CreateUserDto): Promise<StoredUser> {
+  async createUser(
+    createUserDto: CreateUserDto & { roles?: string[] },
+  ): Promise<StoredUser> {
     const id = randomUUID();
     const user: StoredUser = {
       _id: id,
       email: createUserDto.email,
       pseudo: createUserDto.pseudo,
       password: createUserDto.password,
+      roles: ['user'],
     };
 
     this.users.set(id, user);
 
     return { ...user };
+  }
+
+  async createAdminUser(payload: {
+    pseudo: string;
+    email: string;
+    password: string;
+  }): Promise<StoredUser> {
+    const id = randomUUID();
+    const admin: StoredUser = {
+      _id: id,
+      email: payload.email,
+      pseudo: payload.pseudo,
+      password: payload.password,
+      roles: ['admin'],
+    };
+
+    this.users.set(id, admin);
+    return { ...admin };
+  }
+
+  async countAdminUsers(): Promise<number> {
+    return Array.from(this.users.values()).filter((u) => u.roles.includes('admin'))
+      .length;
+  }
+
+  async getAllUsers(): Promise<Array<Omit<StoredUser, 'password'>>> {
+    return Array.from(this.users.values()).map((u) => toPublicUser(u));
   }
 
   async getUserById(id: string): Promise<Omit<StoredUser, 'password'> | null> {
@@ -64,7 +100,7 @@ class InMemoryUserService {
     return null;
   }
 
-  async updateUSer(
+  async updateUser(
     id: string,
     updateUserDto: UpdateUserDto,
   ): Promise<Omit<StoredUser, 'password'> | null> {
@@ -91,7 +127,7 @@ class InMemoryUserService {
   }
 }
 
-describe('Auth flow (e2e)', () => {
+describe('Auth flow and RBAC (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -106,18 +142,31 @@ describe('Auth flow (e2e)', () => {
           signOptions: { expiresIn: process.env.JWT_EXPIRES_IN },
         }),
       ],
-      controllers: [UserController, AuthController, MeController],
+      controllers: [UserController, AuthController, MeController, AdminController],
       providers: [
         { provide: UserService, useClass: InMemoryUserService },
         AuthService,
         LocalStrategy,
         JwtStrategy,
         JwtGuard,
+        RolesGuard,
       ],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+      }),
+    );
     await app.init();
+
+    const userService = moduleFixture.get<UserService>(UserService);
+    await userService.createAdminUser({
+      email: 'admin@example.com',
+      password: await encryptPassword('StrongPass1!'),
+      pseudo: 'admin',
+    });
   });
 
   afterAll(async () => {
@@ -145,10 +194,11 @@ describe('Auth flow (e2e)', () => {
     const token = loginResponse.text.trim().replace(/^"|"$/g, '');
     const decoded = JSON.parse(
       Buffer.from(token.split('.')[1], 'base64url').toString('utf-8'),
-    ) as { sub?: string; email?: string; pseudo?: string };
+    ) as { sub?: string; email?: string; pseudo?: string; roles?: string[] };
 
     expect(token).toBeTruthy();
     expect(decoded.sub).toBeTruthy();
+    expect(decoded.roles).toEqual(['user']);
 
     const meResponse = await request(app.getHttpServer())
       .get('/me')
@@ -158,5 +208,85 @@ describe('Auth flow (e2e)', () => {
     expect(meResponse.body).toMatchObject({ email, pseudo });
     expect(meResponse.body).toHaveProperty('id', decoded.sub);
     expect(meResponse.body).not.toHaveProperty('password');
+  });
+
+
+  it('register ignores client-provided roles and keeps user role only', async () => {
+    const email = `role_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `role_user_${Date.now()}`;
+
+    await request(app.getHttpServer())
+      .post('/users')
+      .send({ email, password, pseudo, roles: ['admin'] })
+      .expect(201);
+
+    const loginResponse = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+
+    const token = loginResponse.text.trim().replace(/^"|"$/g, '');
+    const decoded = JSON.parse(
+      Buffer.from(token.split('.')[1], 'base64url').toString('utf-8'),
+    ) as { roles?: string[] };
+
+    expect(decoded.roles).toEqual(['user']);
+  });
+
+  it('/admin/users returns 401 without token', async () => {
+    await request(app.getHttpServer()).get('/admin/users').expect(401);
+  });
+
+  it('/admin/users returns 403 with a user token', async () => {
+    const email = `rbac_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `rbac_user_${Date.now()}`;
+
+    await request(app.getHttpServer())
+      .post('/users')
+      .send({ email, password, pseudo })
+      .expect(201);
+
+    const loginResponse = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+
+    const userToken = loginResponse.text.trim().replace(/^"|"$/g, '');
+
+    await request(app.getHttpServer())
+      .get('/admin/users')
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(403);
+  });
+
+  it('/admin/users returns 200 with an admin token', async () => {
+    const loginResponse = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'admin@example.com', password: 'StrongPass1!' })
+      .expect(201);
+
+    const adminToken = loginResponse.text.trim().replace(/^"|"$/g, '');
+
+    const response = await request(app.getHttpServer())
+      .get('/admin/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(Array.isArray(response.body)).toBe(true);
+  });
+
+  it('removed /users endpoints return 404', async () => {
+    await request(app.getHttpServer()).get('/users').expect(404);
+    await request(app.getHttpServer()).get('/users/searchId/123').expect(404);
+    await request(app.getHttpServer())
+      .get('/users/searchPseudo/someone')
+      .expect(404);
+    await request(app.getHttpServer())
+      .get('/users/searchEmail/test@example.com')
+      .expect(404);
+    await request(app.getHttpServer()).patch('/users/123').expect(404);
+    await request(app.getHttpServer()).delete('/users/123').expect(404);
   });
 });

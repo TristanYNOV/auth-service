@@ -7,7 +7,8 @@ Service d’authentification du projet d’analyse vidéo sportive (architecture
 Ce service gère actuellement :
 - la création d’utilisateur (`POST /users`),
 - la connexion (`POST /auth/login`) avec émission de JWT,
-- des endpoints self-service (`GET/PATCH/DELETE /me`),
+- les endpoints self-service user (`GET/PATCH/DELETE /me`),
+- les endpoints admin (`/admin/users`),
 - un endpoint de santé (`GET /health`).
 
 ## Quickstart
@@ -20,119 +21,76 @@ docker compose up -d --build
 curl http://localhost:3000/health
 ```
 
-Arrêt :
-
-```bash
-docker compose down
-```
-
 ### Option B — Local (Node.js)
 
 ```bash
+cp .env.example .env
 npm install
 npm run start:dev
 curl http://localhost:3000/health
 ```
 
-> En local, vérifiez que MongoDB est accessible via `DATABASE_URL` (voir `docs/LOCAL_DEV.md`).
+## Security highlights
 
-## Contexte architecture (résumé)
+- RBAC with `roles: ('user'|'admin')[]` in user model.
+- Exactly one admin is enforced at startup:
+  - `0` admin => create from env
+  - `1` admin => OK
+  - `>1` admins => fail-fast
+- Login errors are anti-enumeration:
+  - `Unauthorized: invalid credentials or user not found.`
+- `/users` non-register endpoints were removed; user self-management goes through `/me`.
 
-- Front Angular (navigateur).
-- Entrée HTTP unique via Traefik.
-- Routage prévu : `/api/auth/*` côté gateway avec `StripPrefix(/api/auth)` vers ce service.
-- Côté navigateur, l’intégration visée est en URL relative `/api/auth/...` (same-origin).
-
-Voir la documentation détaillée :
-- `docs/CONTEXT.md`
-- `docs/API.md`
-- `docs/INTEGRATION.md`
-- `docs/TODO_MVP.md`
-
-## Contracts (Source of truth)
-
-Pour la coordination front/back, la source de vérité à copier/coller est dans :
+## Contracts (source of truth)
 
 - `docs/contracts/FEATURES.md`
 - `docs/contracts/ROUTES.md`
 
-Toute évolution d'API doit mettre à jour ces fichiers dans le même changement.
+## Debug local (breakpoints) + MongoDB Compass
 
-## Démarrage rapide (local)
+### 1) Démarrer MongoDB local
+
+Choix A (docker compose, mongo uniquement):
+
+```bash
+docker compose up -d auth_db
+```
+
+Choix B: MongoDB installé en local.
+
+### 2) Configurer `.env` pour local
+
+```env
+DATABASE_URL=mongodb://localhost:27017
+DB_NAME=auth_db
+```
+
+Conserver aussi les variables JWT/SALT/ADMIN.
+
+### 3) Lancer Nest localement
 
 ```bash
 npm install
 npm run start:dev
 ```
 
-Par défaut, l’API écoute sur `PORT` ou `3000`.
+### 4) Connexion MongoDB Compass
 
-## Run with Docker
+- URL: `mongodb://localhost:27017`
+- Database: `auth_db` (ou la valeur de `DB_NAME`)
 
-### Prérequis
+### Important — admin bootstrap
 
-- Docker
-- Docker Compose (`docker compose`)
+Si un admin existe déjà en base, changer `ADMIN_PASSWORD` dans `.env` **ne change pas** le mot de passe existant.
 
-### Configuration
-
-1. Copier l’exemple d’environnement :
-
-```bash
-cp .env.example .env
-```
-
-2. Ajuster les variables si besoin (dev par défaut) :
-- `PORT=3000`
-- `DATABASE_URL=mongodb://auth_db:27017`
-- `DB_NAME=auth`
-- `JWT_SECRET=change-me`
-- `JWT_EXPIRES_IN=30d`
-
-### Démarrage
+Pour réinitialiser l’admin:
+- soit drop de la DB via Compass,
+- soit suppression du volume Docker Mongo (exemple):
 
 ```bash
-docker compose up -d --build
-```
-
-ou via npm scripts :
-
-```bash
-npm run docker:up
-```
-
-### Logs / statut / arrêt
-
-```bash
-docker compose logs -f auth-service
-docker compose ps
 docker compose down
+docker volume rm auth-service_mongo_data
 ```
-
-### Checks de connectivité
-
-- Smoke test API :
-
-```bash
-curl http://localhost:3000/health
-```
-
-- Vérifier la résolution DNS du service Mongo depuis le conteneur app :
-
-```bash
-docker compose exec auth-service sh -lc "getent hosts auth_db"
-```
-
-- Vérifier l’état health de Mongo :
-
-```bash
-docker compose ps
-```
-
-### Note importante hôte Mongo
-
-- Si Nest tourne **dans Docker Compose**, l’hôte Mongo doit être `auth_db`.
-- Si Nest tourne **en local hors Docker**, utilisez plutôt `localhost` dans `DATABASE_URL`.
 
 ## Documentation détaillée
 

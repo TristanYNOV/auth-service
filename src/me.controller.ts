@@ -15,6 +15,8 @@ import { UpdateUserDto } from './schemas/UpdateUser.schema';
 import { encryptPassword } from './utils/bcrypt';
 import { toUserPublicDto, UserPublicDto } from './user/dto/UserPublic.dto';
 import { AuthenticatedRequest } from './auth/types/authenticated-request.type';
+import { RolesGuard } from './auth/guards/roles.guard';
+import { Roles } from './auth/decorators/roles.decorator';
 
 function getCurrentUserId(req: AuthenticatedRequest): string {
   const userId = req.user?.sub;
@@ -29,7 +31,8 @@ function getCurrentUserId(req: AuthenticatedRequest): string {
 }
 
 @Controller()
-@UseGuards(JwtGuard)
+@UseGuards(JwtGuard, RolesGuard)
+@Roles('user')
 export class MeController {
   constructor(private readonly userService: UserService) {}
 
@@ -53,7 +56,7 @@ export class MeController {
       payload.password = await encryptPassword(payload.password);
     }
 
-    const updatedUser = await this.userService.updateUSer(userId, payload);
+    const updatedUser = await this.userService.updateUser(userId, payload);
     if (!updatedUser)
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
