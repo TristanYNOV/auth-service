@@ -51,7 +51,7 @@ At startup, admin bootstrap is idempotent and controlled by env vars:
 Behavior:
 - If disabled: no-op.
 - If enabled and admin email not found: create admin user with hashed password and `roles=['admin']`.
-- If enabled and admin email exists: ensure `admin` role is present.
+- If enabled and admin email exists: ensure `admin` role is present and sync bootstrap credentials (password/pseudo) with env values for deterministic admin login.
 - Secret values (password/token) are never logged.
 
 ## JWT contract (source of truth)

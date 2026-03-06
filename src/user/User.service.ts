@@ -92,4 +92,20 @@ export class UserService {
       { $addToSet: { roles: 'admin' } },
     );
   }
+
+  async updatePasswordAndPseudoByEmail(
+    email: string,
+    hashedPassword: string,
+    pseudo: string,
+  ): Promise<void> {
+    await this.userModel.updateOne(
+      { email },
+      {
+        $set: {
+          password: hashedPassword,
+          pseudo,
+        },
+      },
+    );
+  }
 }

@@ -12,6 +12,7 @@ import * as process from 'node:process';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['.env.local', '.env'],
     }),
     MongooseModule.forRoot(
       process.env.DATABASE_URL || 'mongodb://localhost:3000',

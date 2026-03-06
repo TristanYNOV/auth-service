@@ -62,6 +62,7 @@ ADMIN_BOOTSTRAP_ENABLED=true
 > En local, vérifiez que MongoDB est accessible via `DATABASE_URL` (voir `docs/LOCAL_DEV.md`).
 > En production, fournissez `ADMIN_*` via un secret manager (et non via un fichier commité).
 > Ne jamais committer un fichier `.env`.
+> Si un utilisateur existe déjà avec `ADMIN_EMAIL`, le bootstrap aligne son mot de passe/pseudo sur `ADMIN_PASSWORD`/`ADMIN_PSEUDO` et lui garantit le rôle `admin`.
 
 ## Contexte architecture (résumé)
 

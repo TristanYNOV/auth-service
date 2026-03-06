@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UserService } from '../user/User.service';
 import { encryptPassword } from '../utils/bcrypt';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AdminBootstrapService implements OnApplicationBootstrap {
@@ -42,6 +43,19 @@ export class AdminBootstrapService implements OnApplicationBootstrap {
       });
     } else {
       await this.userService.ensureAdminRoleByEmail(adminEmail);
+
+      const isSamePassword = await bcrypt.compare(
+        adminPassword,
+        existingAdmin.password,
+      );
+      if (!isSamePassword) {
+        const hashedPassword = await encryptPassword(adminPassword);
+        await this.userService.updatePasswordAndPseudoByEmail(
+          adminEmail,
+          hashedPassword,
+          adminPseudo,
+        );
+      }
     }
 
     this.logger.log(`Admin bootstrap ensured for ${adminEmail}`);
