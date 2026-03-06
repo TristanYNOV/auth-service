@@ -14,10 +14,13 @@ export class AuthService {
 
   async validateUser(user: AuthPayloadDto): Promise<string> {
     const findUser = await this.userService.getUserByEmailWithPassword(
-      user.email,
+      user.email.toLowerCase(),
     );
     if (!findUser) {
-      throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
+      throw new HttpException(
+        'Invalid credentials: user does not exist or provided credentials are incorrect',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -25,7 +28,10 @@ export class AuthService {
       findUser.password,
     );
     if (!isPasswordValid) {
-      throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
+      throw new HttpException(
+        'Invalid credentials: user does not exist or provided credentials are incorrect',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const payload: JwtPayload = {

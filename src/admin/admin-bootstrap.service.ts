@@ -2,7 +2,6 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UserService } from '../user/User.service';
 import { encryptPassword } from '../utils/bcrypt';
-import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AdminBootstrapService implements OnApplicationBootstrap {
@@ -14,50 +13,39 @@ export class AdminBootstrapService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const bootstrapEnabled =
-      this.configService.get<string>('ADMIN_BOOTSTRAP_ENABLED') !== 'false';
+    const rawBootstrapFlag = this.configService.get<string>(
+      'ADMIN_BOOTSTRAP_ENABLED',
+      'true',
+    );
+    const bootstrapEnabled = !['false', '0', 'no'].includes(
+      rawBootstrapFlag.toLowerCase(),
+    );
 
     if (!bootstrapEnabled) {
+      this.logger.log('Admin bootstrap is disabled by ADMIN_BOOTSTRAP_ENABLED');
       return;
     }
 
     const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
     const adminPassword = this.configService.get<string>('ADMIN_PASSWORD');
     const adminPseudo =
-      this.configService.get<string>('ADMIN_PSEUDO') ?? 'admin';
+      this.configService.get<string>('ADMIN_PSEUDO')?.trim() || 'admin';
 
     if (!adminEmail || !adminPassword) {
+      this.logger.warn(
+        'Admin bootstrap skipped: ADMIN_EMAIL or ADMIN_PASSWORD is missing',
+      );
       return;
     }
 
-    const existingAdmin =
-      await this.userService.getUserByEmailWithPassword(adminEmail);
+    const hashedPassword = await encryptPassword(adminPassword);
 
-    if (!existingAdmin) {
-      const hashedPassword = await encryptPassword(adminPassword);
-      await this.userService.createUser({
-        email: adminEmail,
-        pseudo: adminPseudo,
-        password: hashedPassword,
-        roles: ['admin'],
-      });
-    } else {
-      await this.userService.ensureAdminRoleByEmail(adminEmail);
+    await this.userService.ensureAdminAccount(
+      adminEmail.toLowerCase(),
+      hashedPassword,
+      adminPseudo,
+    );
 
-      const isSamePassword = await bcrypt.compare(
-        adminPassword,
-        existingAdmin.password,
-      );
-      if (!isSamePassword) {
-        const hashedPassword = await encryptPassword(adminPassword);
-        await this.userService.updatePasswordAndPseudoByEmail(
-          adminEmail,
-          hashedPassword,
-          adminPseudo,
-        );
-      }
-    }
-
-    this.logger.log(`Admin bootstrap ensured for ${adminEmail}`);
+    this.logger.log(`Admin bootstrap ensured for ${adminEmail.toLowerCase()}`);
   }
 }

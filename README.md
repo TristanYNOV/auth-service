@@ -63,6 +63,7 @@ ADMIN_BOOTSTRAP_ENABLED=true
 > En production, fournissez `ADMIN_*` via un secret manager (et non via un fichier commité).
 > Ne jamais committer un fichier `.env`.
 > Si un utilisateur existe déjà avec `ADMIN_EMAIL`, le bootstrap aligne son mot de passe/pseudo sur `ADMIN_PASSWORD`/`ADMIN_PSEUDO` et lui garantit le rôle `admin`.
+> Si `ADMIN_EMAIL` ou `ADMIN_PASSWORD` manque, le bootstrap est ignoré (warning dans les logs).
 
 ## Contexte architecture (résumé)
 

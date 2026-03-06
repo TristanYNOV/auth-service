@@ -93,6 +93,35 @@ export class UserService {
     );
   }
 
+  async ensureAdminAccount(
+    email: string,
+    hashedPassword: string,
+    pseudo: string,
+  ): Promise<void> {
+    const existingUser = await this.userModel.findOne({ email }).exec();
+
+    if (!existingUser) {
+      await this.userModel.create({
+        email,
+        password: hashedPassword,
+        pseudo,
+        roles: ['admin'],
+      });
+
+      return;
+    }
+
+    await this.userModel.updateOne(
+      { email },
+      {
+        $set: {
+          password: hashedPassword,
+          pseudo,
+        },
+        $addToSet: { roles: 'admin' },
+      },
+    );
+  }
   async updatePasswordAndPseudoByEmail(
     email: string,
     hashedPassword: string,

@@ -77,3 +77,12 @@ All fields are optional.
   - `roles` (`Array<'user'|'admin'>`)
   - `iat` (`number`)
   - `exp` (`number`)
+
+
+## Login errors
+
+`POST /auth/login` can return `401` with:
+
+- `Invalid credentials: user does not exist or provided credentials are incorrect`
+
+This explicitly highlights the two possible causes (unknown user or wrong credentials).
