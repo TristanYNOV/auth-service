@@ -16,9 +16,25 @@ Ce service gère actuellement :
 
 ```bash
 cp .env.example .env
+```
+
+Déclarez les variables `ADMIN_*` dans votre `.env` (ou via `env_file` / `environment` dans `docker-compose.yml`) pour créer/assurer un compte admin au démarrage :
+
+```dotenv
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=ChangeMeVeryStrong!
+ADMIN_PSEUDO=admin
+ADMIN_BOOTSTRAP_ENABLED=true
+```
+
+Puis lancez :
+
+```bash
 docker compose up -d --build
 curl http://localhost:3000/health
 ```
+
+Vérification recommandée : connexion admin via les collections Postman (`postman/auth-service.admin.postman_collection.json`).
 
 Arrêt :
 
@@ -34,7 +50,18 @@ npm run start:dev
 curl http://localhost:3000/health
 ```
 
+Créer un admin au démarrage (Option A bootstrap env) via un fichier local non versionné, par exemple `.env.local` :
+
+```dotenv
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=ChangeMeVeryStrong!
+ADMIN_PSEUDO=admin
+ADMIN_BOOTSTRAP_ENABLED=true
+```
+
 > En local, vérifiez que MongoDB est accessible via `DATABASE_URL` (voir `docs/LOCAL_DEV.md`).
+> En production, fournissez `ADMIN_*` via un secret manager (et non via un fichier commité).
+> Ne jamais committer un fichier `.env`.
 
 ## Contexte architecture (résumé)
 
@@ -88,6 +115,10 @@ cp .env.example .env
 - `DB_NAME=auth`
 - `JWT_SECRET=change-me`
 - `JWT_EXPIRES_IN=30d`
+- `ADMIN_EMAIL=admin@example.com`
+- `ADMIN_PASSWORD=ChangeMeVeryStrong!`
+- `ADMIN_PSEUDO=admin`
+- `ADMIN_BOOTSTRAP_ENABLED=true`
 
 ### Démarrage
 

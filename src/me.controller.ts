@@ -9,7 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtGuard } from './auth/guards/jwt.guard';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { UserService } from './user/User.service';
 import { UpdateUserDto } from './schemas/UpdateUser.schema';
 import { encryptPassword } from './utils/bcrypt';
@@ -29,7 +29,7 @@ function getCurrentUserId(req: AuthenticatedRequest): string {
 }
 
 @Controller()
-@UseGuards(JwtGuard)
+@UseGuards(JwtAuthGuard)
 export class MeController {
   constructor(private readonly userService: UserService) {}
 
@@ -53,7 +53,7 @@ export class MeController {
       payload.password = await encryptPassword(payload.password);
     }
 
-    const updatedUser = await this.userService.updateUSer(userId, payload);
+    const updatedUser = await this.userService.updateUser(userId, payload);
     if (!updatedUser)
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 

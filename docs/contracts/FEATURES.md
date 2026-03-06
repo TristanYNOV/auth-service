@@ -5,42 +5,65 @@
 ### Public
 - `GET /health`
 - `POST /auth/login`
-- `POST /users` (register)
+- `POST /users` (register, roles forced to `['user']`)
 
-### Protected (JWT)
+### Protected (JWT, self-service)
 - `GET /me`
 - `PATCH /me`
 - `DELETE /me`
 
-### Legacy routes still present (temporary)
-- `GET /users`
-- `GET /users/searchId/:id`
-- `GET /users/searchPseudo/:pseudo`
-- `GET /users/searchEmail/:email`
-- `PATCH /users/:id`
-- `DELETE /users/:id`
+### Admin (JWT + RBAC)
+- `GET /admin/users`
+- `PATCH /admin/users/:id`
+- `DELETE /admin/users/:id`
 
-### Removed
-- `GET /auth/test`
+### Legacy `/users` routes (hardened)
+- `GET /users` (admin-only)
+- `GET /users/searchId/:id` (admin-only)
+- `GET /users/searchPseudo/:pseudo` (admin-only)
+- `GET /users/searchEmail/:email` (admin-only)
+- `PATCH /users/:id` (admin or self)
+- `DELETE /users/:id` (admin or self)
 
-## Security and data exposure
+## Security and RBAC
 
 - `password` is never returned by API responses.
 - Public user output contract is sanitized through `UserPublicDto`:
   - `id`
   - `pseudo`
   - `email`
-- `PATCH /me` and `DELETE /me` are self-only and use JWT identity (`req.user.sub`).
+  - `roles`
+- RBAC roles available:
+  - `user`
+  - `admin`
+- Access model:
+  - Standard user: self-only operations (`/me`, and own `/users/:id` patch/delete)
+  - Admin user: admin endpoints + user management operations
 
-## JWT contract (current source of truth)
+## Admin bootstrap via environment (Option A)
+
+At startup, admin bootstrap is idempotent and controlled by env vars:
+- `ADMIN_EMAIL` (required for bootstrap)
+- `ADMIN_PASSWORD` (required for bootstrap)
+- `ADMIN_PSEUDO` (optional)
+- `ADMIN_BOOTSTRAP_ENABLED` (optional, default enabled; `"false"` disables)
+
+Behavior:
+- If disabled: no-op.
+- If enabled and admin email not found: create admin user with hashed password and `roles=['admin']`.
+- If enabled and admin email exists: ensure `admin` role is present.
+- Secret values (password/token) are never logged.
+
+## JWT contract (source of truth)
 
 - Bearer format: `Authorization: Bearer <token>`.
 - Canonical identity claim: `sub` (`string`).
-- Guaranteed claims in the access token payload:
+- Guaranteed claims in access token payload:
   - `sub`
   - `email`
   - `pseudo`
+  - `roles`
   - `iat`
   - `exp`
-- `_id` is not included in JWT payload.
-- Refresh token is not part of this P0 scope.
+- `_id` is not part of JWT payload contract.
+- Refresh token is out of scope for this P0.

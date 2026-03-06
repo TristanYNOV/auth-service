@@ -4,6 +4,8 @@ import { UserModule } from './user/User.module';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health.controller';
+import { AdminModule } from './admin/admin.module';
+import { AdminBootstrapService } from './admin/admin-bootstrap.service';
 import * as process from 'node:process';
 
 @Module({
@@ -19,8 +21,9 @@ import * as process from 'node:process';
     ),
     UserModule,
     AuthModule,
+    AdminModule,
   ],
   controllers: [HealthController],
-  providers: [],
+  providers: [AdminBootstrapService],
 })
 export class AppModule {}

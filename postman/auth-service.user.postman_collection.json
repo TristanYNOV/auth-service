@@ -1,0 +1,174 @@
+{
+  "info": {
+    "name": "auth-service.user",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const useTraefik = String(pm.environment.get('useTraefik') || 'false').toLowerCase() === 'true';",
+          "const baseUrlTraefik = pm.environment.get('baseUrlTraefik') || 'http://localhost/api/auth';",
+          "const baseUrlDirect = pm.environment.get('baseUrlDirect') || 'http://localhost:3000';",
+          "pm.environment.set('baseUrl', useTraefik ? baseUrlTraefik : baseUrlDirect);",
+          "",
+          "const rawToken = pm.collectionVariables.get('accessTokenUser') || '';",
+          "const token = String(rawToken).trim().replace(/^Bearer\\s+/i, '').replace(/^\\\"|\\\"$/g, '');",
+          "if (token) pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${token}` });"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Register",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const email = pm.variables.replaceIn('{{$randomEmail}}');",
+              "const pseudo = pm.variables.replaceIn('{{$randomUserName}}');",
+              "const strongPassword = `${pm.variables.replaceIn('{{$randomPassword}}')}A1!`;",
+              "pm.collectionVariables.set('userEmail', email);",
+              "pm.collectionVariables.set('userPseudo', pseudo);",
+              "pm.collectionVariables.set('userPassword', strongPassword);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pseudo\": \"{{userPseudo}}\",\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Login User",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const token = String(pm.response.text()).trim().replace(/^\\\"|\\\"$/g, '');",
+              "pm.test('login returns JWT', function () {",
+              "  pm.expect(pm.response.code).to.eql(201);",
+              "  pm.expect(token.split('.').length).to.eql(3);",
+              "});",
+              "pm.collectionVariables.set('accessTokenUser', token);",
+              "",
+              "function decodeBase64Url(input) {",
+              "  const normalized = input.replace(/-/g, '+').replace(/_/g, '/');",
+              "  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);",
+              "  return atob(padded);",
+              "}",
+              "",
+              "const payload = JSON.parse(decodeBase64Url(token.split('.')[1]));",
+              "pm.collectionVariables.set('userId', payload.sub || '');",
+              "pm.collectionVariables.set('userRoles', JSON.stringify(payload.roles || []));",
+              "pm.test('jwt payload uses sub and roles', function () {",
+              "  pm.expect(payload.sub).to.be.a('string').and.not.empty;",
+              "  pm.expect(payload.roles).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Me",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test('me returns 200', function () { pm.expect(pm.response.code).to.eql(200); });",
+              "pm.test('me response does not expose password', function () { pm.expect(body.password).to.eql(undefined); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "me"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "userEmail", "value": "" },
+    { "key": "userPseudo", "value": "" },
+    { "key": "userPassword", "value": "" },
+    { "key": "accessTokenUser", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "userRoles", "value": "" }
+  ]
+}

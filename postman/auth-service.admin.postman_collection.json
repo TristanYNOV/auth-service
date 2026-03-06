@@ -1,0 +1,153 @@
+{
+  "info": {
+    "name": "auth-service.admin",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const useTraefik = String(pm.environment.get('useTraefik') || 'false').toLowerCase() === 'true';",
+          "const baseUrlTraefik = pm.environment.get('baseUrlTraefik') || 'http://localhost/api/auth';",
+          "const baseUrlDirect = pm.environment.get('baseUrlDirect') || 'http://localhost:3000';",
+          "pm.environment.set('baseUrl', useTraefik ? baseUrlTraefik : baseUrlDirect);",
+          "",
+          "const rawToken = pm.collectionVariables.get('accessTokenAdmin') || '';",
+          "const token = String(rawToken).trim().replace(/^Bearer\\s+/i, '').replace(/^\\\"|\\\"$/g, '');",
+          "if (token) pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${token}` });"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Admin Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const token = String(pm.response.text()).trim().replace(/^\\\"|\\\"$/g, '');",
+              "pm.test('admin login returns JWT', function () {",
+              "  pm.expect(pm.response.code).to.eql(201);",
+              "  pm.expect(token.split('.').length).to.eql(3);",
+              "});",
+              "pm.collectionVariables.set('accessTokenAdmin', token);",
+              "",
+              "function decodeBase64Url(input) {",
+              "  const normalized = input.replace(/-/g, '+').replace(/_/g, '/');",
+              "  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);",
+              "  return atob(padded);",
+              "}",
+              "",
+              "const payload = JSON.parse(decodeBase64Url(token.split('.')[1]));",
+              "pm.collectionVariables.set('adminId', payload.sub || '');",
+              "pm.collectionVariables.set('adminRoles', JSON.stringify(payload.roles || []));",
+              "pm.test('admin role is present in JWT', function () {",
+              "  pm.expect(payload.roles || []).to.include('admin');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Admin List Users",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin list users returns 200', function () {",
+              "  pm.expect(pm.response.code).to.eql(200);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/admin/users",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admin",
+            "users"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Admin List Users - no token (401)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.request.headers.remove('Authorization');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin endpoint without token returns 401', function () {",
+              "  pm.expect(pm.response.code).to.eql(401);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/admin/users",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admin",
+            "users"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "accessTokenAdmin", "value": "" },
+    { "key": "adminId", "value": "" },
+    { "key": "adminRoles", "value": "" }
+  ]
+}

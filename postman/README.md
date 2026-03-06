@@ -1,50 +1,43 @@
-# Postman kit - auth-service (P0)
+# Postman kit - auth-service (RBAC)
 
 ## Fichiers
 
-- `auth-service.postman_collection.json`
+- `auth-service.user.postman_collection.json`
+- `auth-service.admin.postman_collection.json`
 - `auth-service.local.postman_environment.json`
 
-## Variables principales
+## Environment minimal
 
 - `useTraefik` (`true`|`false`)
 - `baseUrlTraefik` (`http://localhost/api/auth`)
 - `baseUrlDirect` (`http://localhost:3000`)
-- `baseUrl` (calculée automatiquement)
-- `auth_email`, `auth_password`, `auth_pseudo`
-- `first_name`, `last_name`
-- `accessTokenUser`, `userId`, `createdUserId`
+- `adminEmail`
+- `adminPassword`
 
-## Scripts (orientés parcours utilisateur)
+Chaque collection calcule `baseUrl` automatiquement en pre-request selon `useTraefik`.
 
-- Collection pre-request
-  - calcule `baseUrl` selon `useTraefik`
-  - injecte automatiquement `Authorization: Bearer ...` si token présent
-  - nettoie automatiquement les formats invalides courants:
-    - token préfixé par `Bearer `
-    - token entouré de guillemets (`"..."`)
-- Register pre-request
-  - génère des valeurs aléatoires pertinentes via variables dynamiques Postman:
-    - `{{$randomEmail}}`, `{{$randomPassword}}`, `{{$randomUserName}}`, `{{$randomFirstName}}`, `{{$randomLastName}}`
-  - renforce le mot de passe généré (`+ A1!`)
-  - stocke les valeurs en `collectionVariables`
-- SignIn test script
-  - sauvegarde le JWT nettoyé dans `accessTokenUser`
-  - vérifie que le token est bien un JWT utilisable (3 segments)
-  - décode le payload JWT et sauvegarde `userId = sub`, `auth_email`, `auth_pseudo`
-- Me - Get test script
-  - logge le header `Authorization` envoyé
-  - logge `accessTokenUser` masqué
-  - échoue explicitement si le header `Authorization` est absent/mal formé
-- Session - Logout (clear token)
-  - supprime `accessTokenUser` et `userId` pour simuler une déconnexion
+## Collection USER
 
-## Parcours recommandé
+- Pre-request de collection
+  - calcule `baseUrl`
+  - injecte `Authorization: Bearer <accessTokenUser>` si présent
+- `Login User` tests
+  - stocke `accessTokenUser`
+  - décode JWT et stocke `userId=sub`, `userRoles`
+- `Me` tests
+  - assert `200`
+  - assert absence de champ `password`
 
-1. `Health`
-2. `Register`
-3. `SignIn`
-4. `Me - Get`
-5. `Me - Patch`
-6. `Me - Delete`
-7. `Session - Logout (clear token)`
+## Collection ADMIN
+
+- Pre-request de collection
+  - calcule `baseUrl`
+  - injecte `Authorization: Bearer <accessTokenAdmin>` si présent
+- `Admin Login` tests
+  - utilise `adminEmail`/`adminPassword` (env)
+  - stocke `accessTokenAdmin`
+  - vérifie que `roles` contient `admin`
+- `Admin List Users`
+  - assert `200`
+- `Admin List Users - no token (401)`
+  - negative test sans token

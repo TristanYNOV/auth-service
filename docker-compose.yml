@@ -31,6 +31,10 @@ services:
       DB_NAME: ${DB_NAME:-auth}
       JWT_SECRET: ${JWT_SECRET:-change-me}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_PSEUDO: ${ADMIN_PSEUDO:-admin}
+      ADMIN_BOOTSTRAP_ENABLED: ${ADMIN_BOOTSTRAP_ENABLED:-true}
     ports:
       - '3000:3000'
     depends_on:
