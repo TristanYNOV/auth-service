@@ -42,6 +42,13 @@ function canManageUser(
   return isAdmin || isSelf;
 }
 
+function ensureAdminAccess(req: AuthenticatedRequest): void {
+  const isAdmin = req.user.roles.includes('admin');
+  if (!isAdmin) {
+    throw new ForbiddenException('Admin role is required for this endpoint');
+  }
+}
+
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -63,7 +70,8 @@ export class UserController {
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async getAllUser(): Promise<UserPublicDto[]> {
+  async getAllUser(@Req() req: AuthenticatedRequest): Promise<UserPublicDto[]> {
+    ensureAdminAccess(req);
     const users = await this.userService.getAllUsers();
     return users.map((user) => toUserPublicDto(user));
   }
@@ -71,8 +79,12 @@ export class UserController {
   @Get('searchId/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async getUserById(@Param('id') id: string): Promise<UserPublicDto> {
+  async getUserById(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<UserPublicDto> {
     checkIDParam(id);
+    ensureAdminAccess(req);
     const user = await this.userService.getUserById(id);
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
@@ -84,7 +96,9 @@ export class UserController {
   @Roles('admin')
   async getUserByPseudo(
     @Param('pseudo') pseudo: string,
+    @Req() req: AuthenticatedRequest,
   ): Promise<UserPublicDto> {
+    ensureAdminAccess(req);
     const user = await this.userService.getUserByPseudo(pseudo);
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
@@ -94,7 +108,11 @@ export class UserController {
   @Get('searchEmail/:email')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async getUserByEmail(@Param('email') email: string): Promise<UserPublicDto> {
+  async getUserByEmail(
+    @Param('email') email: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<UserPublicDto> {
+    ensureAdminAccess(req);
     const user = await this.userService.getUserByEmail(email);
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
