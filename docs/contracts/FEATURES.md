@@ -6,6 +6,8 @@
 - `GET /health`
 - `POST /users` (register, always creates roles=`['user']`)
 - `POST /auth/login`
+- `POST /auth/refresh`
+- `POST /auth/logout`
 
 ### Protected (JWT + role `user`)
 - `GET /me`
@@ -16,6 +18,36 @@
 - `GET /admin/users`
 - `PATCH /admin/users/:id`
 - `DELETE /admin/users/:id`
+
+## Session model (P2)
+
+- Access token TTL: **15 minutes**.
+- Refresh token TTL: **30 days**.
+- Refresh token format: **opaque random token** (not JWT), never returned in body.
+- Refresh transport: cookie `refreshToken` with:
+  - `HttpOnly: true`
+  - `SameSite: Lax`
+  - `Secure: true` only when `NODE_ENV=production`
+  - `Path: /auth`
+- Rotation on each `POST /auth/refresh`:
+  - old refresh session is revoked (`revokedAt`)
+  - new refresh session is created (`rotatedFromHash` references old hash)
+- Multi-device supported: one refresh session per login/device.
+
+## RefreshSession persistence
+
+Collection: `RefreshSession`
+- `userId`
+- `refreshTokenHash` (unique, hashed with SHA-256)
+- `createdAt`
+- `expiresAt`
+- `revokedAt?`
+- `rotatedFromHash?`
+- `userAgent?`
+
+Storage notes:
+- `userAgent` is stored.
+- **IP address is not stored**.
 
 ## Security model
 
@@ -40,16 +72,6 @@ Rules:
 - no promote endpoint
 - no automatic promotion
 - existing admin is never overwritten/reset from `.env`
-
-## JWT contract
-
-JWT payload includes:
-- `sub`
-- `email`
-- `pseudo`
-- `roles`
-- `iat`
-- `exp`
 
 ## Login failure message
 

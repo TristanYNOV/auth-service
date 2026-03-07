@@ -4,6 +4,10 @@ import { AuthService } from './auth.service';
 import { UserService } from '../user/User.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from '../schemas/User.schema';
+import {
+  RefreshSession,
+  RefreshSessionSchema,
+} from '../schemas/RefreshSession.schema';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import * as process from 'node:process';
 import { PassportModule } from '@nestjs/passport';
@@ -33,6 +37,10 @@ function buildSignOptions(): JwtSignOptions {
       {
         name: User.name,
         schema: UserSchema,
+      },
+      {
+        name: RefreshSession.name,
+        schema: RefreshSessionSchema,
       },
     ]),
     PassportModule,

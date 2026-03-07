@@ -6,7 +6,8 @@ Service d’authentification du projet d’analyse vidéo sportive (architecture
 
 Ce service gère actuellement :
 - la création d’utilisateur (`POST /users`),
-- la connexion (`POST /auth/login`) avec émission de JWT,
+- la connexion (`POST /auth/login`) avec émission de JWT access (15m) + cookie refresh HttpOnly (30j),
+- la rotation refresh (`POST /auth/refresh`) et la révocation (`POST /auth/logout`),
 - les endpoints self-service user (`GET/PATCH/DELETE /me`),
 - les endpoints admin (`/admin/users`),
 - un endpoint de santé (`GET /health`).
@@ -54,6 +55,14 @@ En strict mode, `JWT_SECRET` faible/placeholder est refusé (minimum 16 caractè
 - Production: utiliser `.env.example.prod` comme référence de structure, **sans jamais commiter de secret réel**.
 - En prod, injecter les valeurs finales via secret manager / CI (pas via fichiers versionnés).
 
+
+## Angular integration (cookies + refresh)
+
+- Les appels `POST /auth/refresh` et `POST /auth/logout` doivent être faits avec `credentials: true` (ex: `withCredentials: true` en Angular HttpClient) pour que le navigateur envoie le cookie HttpOnly.
+- Le front doit conserver l'access token en mémoire (pas dans localStorage) et utiliser `/auth/refresh` pour en obtenir un nouveau.
+- En dev HTTP, `SameSite=Lax` est utilisé (MVP sans certificat).
+- Le flag `Secure` du cookie refresh est activé uniquement en production (`NODE_ENV=production`).
+
 ## Security highlights
 
 - RBAC with `roles: ('user'|'admin')[]` in user model.
@@ -90,7 +99,7 @@ Choix B: MongoDB installé en local.
 DATABASE_URL=mongodb://localhost:27017
 DB_NAME=auth_db
 JWT_SECRET=<votre_secret_partage>
-JWT_EXPIRES_IN=30d
+JWT_EXPIRES_IN=15m
 NODE_ENV=development
 STRICT_ENV=false
 ```
