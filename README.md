@@ -57,7 +57,7 @@ En strict mode, `JWT_SECRET` faible/placeholder est refusé (minimum 16 caractè
 
 ## CI/CD
 
-- CI GitHub Actions: lint + tests + e2e à chaque PR vers `master` et à chaque push sur `master`.
+- CI GitHub Actions: lint + e2e à chaque PR vers `master` et à chaque push sur `master` (tests unitaires désactivés temporairement tant qu’aucun `*.spec.ts` n’existe).
 - CD GitHub Actions: build et publication de l’image Docker sur GHCR à chaque push sur `master`.
 - Image publiée: `ghcr.io/<owner>/auth-service`
   - `:main` (tag mouvant)

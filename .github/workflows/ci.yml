@@ -50,8 +50,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit tests
-        run: npm run test
 
       - name: E2E tests
         run: npm run test:e2e
