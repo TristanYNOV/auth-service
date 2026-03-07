@@ -7,7 +7,7 @@ Ce document décrit le contrat d’intégration de `auth-service` dans un repo d
 - Registry: `ghcr.io`
 - Repository: `ghcr.io/<owner>/auth-service`
 - Tags publiés:
-  - `:main` → tag mouvant (dernière version de la branche `main`)
+  - `:main` → tag mouvant (dernière version de la branche `master`)
   - `:sha-<commit_sha>` → tag immuable (recommandé pour déploiements reproductibles)
 
 **Recommandation:** utiliser `:sha-<commit_sha>` en production, garder `:main` pour environnements de dev/intégration.
