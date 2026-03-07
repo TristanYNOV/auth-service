@@ -2,9 +2,10 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
-import { randomUUID } from 'node:crypto';
+import { Types } from 'mongoose';
 import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
 import { JwtGuard } from '../src/auth/guards/jwt.guard';
@@ -19,6 +20,7 @@ import { UserService } from '../src/user/User.service';
 import { CreateUserDto } from '../src/user/dto/CreateUser.dto';
 import { UserRole } from '../src/schemas/User.schema';
 import { encryptPassword } from '../src/utils/bcrypt';
+import { RefreshSession } from '../src/schemas/RefreshSession.schema';
 
 type StoredUser = {
   _id: string;
@@ -37,13 +39,28 @@ function toPublicUser(user: StoredUser): Omit<StoredUser, 'password'> {
   };
 }
 
+function getSetCookieValues(headers: Record<string, unknown>): string[] {
+  const headerValue = headers['set-cookie'];
+  if (Array.isArray(headerValue)) {
+    return headerValue.filter(
+      (value): value is string => typeof value === 'string',
+    );
+  }
+
+  if (typeof headerValue === 'string') {
+    return [headerValue];
+  }
+
+  return [];
+}
+
 class InMemoryUserService {
   private readonly users = new Map<string, StoredUser>();
 
   async createUser(
     createUserDto: CreateUserDto & { roles?: string[] },
   ): Promise<StoredUser> {
-    const id = randomUUID();
+    const id = new Types.ObjectId().toString();
     const user: StoredUser = {
       _id: id,
       email: createUserDto.email,
@@ -62,7 +79,7 @@ class InMemoryUserService {
     email: string;
     password: string;
   }): Promise<StoredUser> {
-    const id = randomUUID();
+    const id = new Types.ObjectId().toString();
     const admin: StoredUser = {
       _id: id,
       email: payload.email,
@@ -129,12 +146,72 @@ class InMemoryUserService {
   }
 }
 
+type RefreshSessionRecord = {
+  userId: string;
+  refreshTokenHash: string;
+  createdAt: Date;
+  expiresAt: Date;
+  revokedAt?: Date;
+  rotatedFromHash?: string;
+  userAgent?: string;
+};
+
+class InMemoryRefreshSessionModel {
+  private readonly sessions: RefreshSessionRecord[] = [];
+
+  async create(data: RefreshSessionRecord): Promise<RefreshSessionRecord> {
+    const session = { ...data };
+    this.sessions.push(session);
+    return session;
+  }
+
+  findOne(filter: {
+    refreshTokenHash: string;
+    revokedAt: { $eq: null };
+    expiresAt: { $gt: Date };
+  }): { exec: () => Promise<RefreshSessionRecord | null> } {
+    return {
+      exec: async () => {
+        const found = this.sessions.find(
+          (session) =>
+            session.refreshTokenHash === filter.refreshTokenHash &&
+            !session.revokedAt &&
+            session.expiresAt > filter.expiresAt.$gt,
+        );
+
+        return found ?? null;
+      },
+    };
+  }
+
+  updateOne(
+    filter: { refreshTokenHash: string; revokedAt: { $eq: null } },
+    update: { $set: { revokedAt: Date } },
+  ): { exec: () => Promise<void> } {
+    return {
+      exec: async () => {
+        const found = this.sessions.find(
+          (session) =>
+            session.refreshTokenHash === filter.refreshTokenHash &&
+            !session.revokedAt,
+        );
+        if (found) {
+          found.revokedAt = update.$set.revokedAt;
+        }
+      },
+    };
+  }
+}
+
 describe('Auth flow and RBAC (e2e)', () => {
   let app: INestApplication;
+  let server: ReturnType<INestApplication['getHttpServer']>;
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'e2e-secret';
-    process.env.JWT_EXPIRES_IN = '30d';
+    process.env.JWT_EXPIRES_IN = '15m';
+
+    const refreshSessionModel = new InMemoryRefreshSessionModel();
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [
@@ -155,6 +232,10 @@ describe('Auth flow and RBAC (e2e)', () => {
       ],
       providers: [
         { provide: UserService, useClass: InMemoryUserService },
+        {
+          provide: getModelToken(RefreshSession.name),
+          useValue: refreshSessionModel,
+        },
         AuthService,
         LocalStrategy,
         JwtStrategy,
@@ -171,6 +252,7 @@ describe('Auth flow and RBAC (e2e)', () => {
     );
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
+    server = app.getHttpServer();
 
     const userService = moduleFixture.get<UserService>(UserService);
     await userService.createAdminUser({
@@ -189,7 +271,7 @@ describe('Auth flow and RBAC (e2e)', () => {
     const password = 'StrongPass1!';
     const pseudo = `e2e_user_${Date.now()}`;
 
-    const registerResponse = await request(app.getHttpServer())
+    const registerResponse = await request(server)
       .post('/users')
       .send({ email, password, pseudo })
       .expect(201);
@@ -197,7 +279,7 @@ describe('Auth flow and RBAC (e2e)', () => {
     expect(registerResponse.body).toMatchObject({ email, pseudo });
     expect(registerResponse.body).not.toHaveProperty('password');
 
-    const loginResponse = await request(app.getHttpServer())
+    const loginResponse = await request(server)
       .post('/auth/login')
       .send({ email, password })
       .expect(201);
@@ -211,7 +293,7 @@ describe('Auth flow and RBAC (e2e)', () => {
     expect(decoded.sub).toBeTruthy();
     expect(decoded.roles).toEqual(['user']);
 
-    const meResponse = await request(app.getHttpServer())
+    const meResponse = await request(server)
       .get('/me')
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
@@ -226,12 +308,12 @@ describe('Auth flow and RBAC (e2e)', () => {
     const password = 'StrongPass1!';
     const pseudo = `role_user_${Date.now()}`;
 
-    await request(app.getHttpServer())
+    await request(server)
       .post('/users')
       .send({ email, password, pseudo, roles: ['admin'] })
       .expect(201);
 
-    const loginResponse = await request(app.getHttpServer())
+    const loginResponse = await request(server)
       .post('/auth/login')
       .send({ email, password })
       .expect(201);
@@ -245,9 +327,7 @@ describe('Auth flow and RBAC (e2e)', () => {
   });
 
   it('/admin/users returns 401 without token', async () => {
-    const response = await request(app.getHttpServer())
-      .get('/admin/users')
-      .expect(401);
+    const response = await request(server).get('/admin/users').expect(401);
 
     expect(response.body).toMatchObject({
       statusCode: 401,
@@ -263,19 +343,19 @@ describe('Auth flow and RBAC (e2e)', () => {
     const password = 'StrongPass1!';
     const pseudo = `rbac_user_${Date.now()}`;
 
-    await request(app.getHttpServer())
+    await request(server)
       .post('/users')
       .send({ email, password, pseudo })
       .expect(201);
 
-    const loginResponse = await request(app.getHttpServer())
+    const loginResponse = await request(server)
       .post('/auth/login')
       .send({ email, password })
       .expect(201);
 
     const userToken = loginResponse.text.trim().replace(/^"|"$/g, '');
 
-    const response = await request(app.getHttpServer())
+    const response = await request(server)
       .get('/admin/users')
       .set('Authorization', `Bearer ${userToken}`)
       .expect(403);
@@ -294,12 +374,12 @@ describe('Auth flow and RBAC (e2e)', () => {
     const password = 'StrongPass1!';
     const pseudo = `alg_user_${Date.now()}`;
 
-    await request(app.getHttpServer())
+    await request(server)
       .post('/users')
       .send({ email, password, pseudo })
       .expect(201);
 
-    const loginResponse = await request(app.getHttpServer())
+    const loginResponse = await request(server)
       .post('/auth/login')
       .send({ email, password })
       .expect(201);
@@ -313,7 +393,7 @@ describe('Auth flow and RBAC (e2e)', () => {
   });
 
   it('invalid login keeps the exact unauthorized message', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await request(server)
       .post('/auth/login')
       .send({ email: 'missing@example.com', password: 'wrong-password' })
       .expect(401);
@@ -328,14 +408,14 @@ describe('Auth flow and RBAC (e2e)', () => {
   });
 
   it('/admin/users returns 200 with an admin token', async () => {
-    const loginResponse = await request(app.getHttpServer())
+    const loginResponse = await request(server)
       .post('/auth/login')
       .send({ email: 'admin@example.com', password: 'StrongPass1!' })
       .expect(201);
 
     const adminToken = loginResponse.text.trim().replace(/^"|"$/g, '');
 
-    const response = await request(app.getHttpServer())
+    const response = await request(server)
       .get('/admin/users')
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
@@ -343,16 +423,96 @@ describe('Auth flow and RBAC (e2e)', () => {
     expect(Array.isArray(response.body)).toBe(true);
   });
 
+  it('login sets refresh cookie and refresh returns {accessToken}', async () => {
+    const email = `refresh_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `refresh_user_${Date.now()}`;
+
+    await request(server)
+      .post('/users')
+      .send({ email, password, pseudo })
+      .expect(201);
+
+    const loginResponse = await request(server)
+      .post('/auth/login')
+      .set('User-Agent', 'e2e-agent')
+      .send({ email, password })
+      .expect(201);
+
+    const refreshCookie = getSetCookieValues(loginResponse.headers).find(
+      (cookie) => cookie.startsWith('refreshToken='),
+    );
+
+    const loginToken = loginResponse.text.trim().replace(/^\"|\"$/g, '');
+    expect(typeof loginToken).toBe('string');
+    expect(refreshCookie).toContain('HttpOnly');
+    expect(refreshCookie).toContain('SameSite=Lax');
+    expect(refreshCookie).toBeDefined();
+
+    const refreshResponse = await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', refreshCookie as string)
+      .expect(200);
+
+    expect(refreshResponse.body).toHaveProperty('accessToken');
+    expect(typeof refreshResponse.body.accessToken).toBe('string');
+
+    const rotatedCookie = getSetCookieValues(refreshResponse.headers).find(
+      (cookie) => cookie.startsWith('refreshToken='),
+    );
+    expect(rotatedCookie).toBeDefined();
+
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', refreshCookie as string)
+      .expect(401);
+
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', rotatedCookie as string)
+      .expect(200);
+  });
+
+  it('logout revokes refresh cookie and refresh after logout returns 401', async () => {
+    const email = `logout_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `logout_user_${Date.now()}`;
+
+    await request(server)
+      .post('/users')
+      .send({ email, password, pseudo })
+      .expect(201);
+
+    const loginResponse = await request(server)
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+
+    const refreshCookie = getSetCookieValues(loginResponse.headers).find(
+      (cookie) => cookie.startsWith('refreshToken='),
+    );
+    expect(refreshCookie).toBeDefined();
+
+    await request(server)
+      .post('/auth/logout')
+      .set('Cookie', refreshCookie as string)
+      .expect(200)
+      .expect({ message: 'Logged out' });
+
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', refreshCookie as string)
+      .expect(401);
+  });
+
   it('removed /users endpoints return 404', async () => {
-    await request(app.getHttpServer()).get('/users').expect(404);
-    await request(app.getHttpServer()).get('/users/searchId/123').expect(404);
-    await request(app.getHttpServer())
-      .get('/users/searchPseudo/someone')
-      .expect(404);
-    await request(app.getHttpServer())
+    await request(server).get('/users').expect(404);
+    await request(server).get('/users/searchId/123').expect(404);
+    await request(server).get('/users/searchPseudo/someone').expect(404);
+    await request(server)
       .get('/users/searchEmail/test@example.com')
       .expect(404);
-    await request(app.getHttpServer()).patch('/users/123').expect(404);
-    await request(app.getHttpServer()).delete('/users/123').expect(404);
+    await request(server).patch('/users/123').expect(404);
+    await request(server).delete('/users/123').expect(404);
   });
 });

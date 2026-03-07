@@ -12,9 +12,13 @@
   - Health
   - Register
   - Login (user)
+  - Refresh
+  - Logout
   - Me (GET/PATCH/DELETE)
 - Folder `Admin`
   - Admin - Login
+  - Admin - Refresh
+  - Admin - Logout
   - Admin - List Users
   - Admin - Patch User
   - Admin - Delete User
@@ -47,10 +51,18 @@ Defaults are aligned with `.env.example`.
   - stores `accessTokenUser`
   - decodes header/payload and stores `userId = sub`
   - asserts JWT header `alg === HS256`
-  - validates `iss` / `aud` only if present in token and expected env values are set
-- Admin - Login tests:
-  - stores `accessTokenAdmin`
-  - asserts `roles` contains `admin`
-  - asserts JWT header `alg === HS256`
-- Admin access tests:
-  - assert status and stable error contract shape for `401` and `403`
+- Refresh tests:
+  - read `{ accessToken }` JSON response
+  - overwrite `accessTokenUser` / `accessTokenAdmin`
+- Cookie jar:
+  - HttpOnly cookie `refreshToken` is used automatically by Postman
+  - no script tries to read the refresh cookie value
+
+## Suggested scenario (User)
+
+1. Login (user)
+2. Me (GET)
+3. Refresh
+4. Me (GET)
+5. Logout
+6. Refresh (expect 401)

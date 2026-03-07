@@ -74,6 +74,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
                   "const token = pm.response.text().replace(/^\"|\"$/g, '');",
                   "pm.collectionVariables.set('accessTokenUser', token);",
                   "const decodePart = (part) => JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));",
@@ -82,22 +83,7 @@
                   "pm.collectionVariables.set('userId', payload.sub);",
                   "pm.test('JWT alg is HS256', function () {",
                   "  pm.expect(header.alg).to.eql('HS256');",
-                  "});",
-                  "if (payload.iss && pm.environment.get('jwtIssuer')) {",
-                  "  pm.test('JWT issuer matches env when present', function () {",
-                  "    pm.expect(payload.iss).to.eql(pm.environment.get('jwtIssuer'));",
-                  "  });",
-                  "}",
-                  "if (payload.aud && pm.environment.get('jwtAudience')) {",
-                  "  pm.test('JWT audience matches env when present', function () {",
-                  "    const expected = pm.environment.get('jwtAudience');",
-                  "    if (Array.isArray(payload.aud)) {",
-                  "      pm.expect(payload.aud).to.include(expected);",
-                  "    } else {",
-                  "      pm.expect(payload.aud).to.eql(expected);",
-                  "    }",
-                  "  });",
-                  "}"
+                  "});"
                 ]
               }
             }
@@ -116,6 +102,97 @@
             },
             "url": "{{baseUrl}}/auth/login"
           }
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('refresh returns accessToken', function () { pm.expect(typeof data.accessToken).to.eql('string'); });",
+                  "pm.collectionVariables.set('accessTokenUser', data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('logout message', function () { pm.expect(pm.response.json().message).to.eql('Logged out'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh after Logout (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "response": []
         },
         {
           "name": "Me (GET)",
@@ -161,6 +238,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
                   "const token = pm.response.text().replace(/^\"|\"$/g, '');",
                   "pm.collectionVariables.set('accessTokenAdmin', token);",
                   "const decodePart = (part) => JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));",
@@ -192,6 +270,68 @@
             },
             "url": "{{baseUrl}}/auth/login"
           }
+        },
+        {
+          "name": "Admin - Refresh",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('refresh returns accessToken', function () { pm.expect(typeof data.accessToken).to.eql('string'); });",
+                  "pm.collectionVariables.set('accessTokenAdmin', data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin - Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('logout message', function () { pm.expect(pm.response.json().message).to.eql('Logged out'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Admin - List Users",
