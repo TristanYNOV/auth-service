@@ -14,6 +14,11 @@
   - Login (user)
   - Refresh
   - Logout
+  - Sessions (GET)
+  - Session revoke by id (DELETE)
+  - Sessions revoke all (DELETE)
+  - Refresh after logout all (expect 401)
+  - Refresh after Logout (expect 401)
   - Me (GET/PATCH/DELETE)
 - Folder `Admin`
   - Admin - Login
@@ -51,6 +56,10 @@ Defaults are aligned with `.env.example`.
   - stores `accessTokenUser`
   - decodes header/payload and stores `userId = sub`
   - asserts JWT header `alg === HS256`
+- Sessions (GET) tests:
+  - validates response status and array shape
+  - stores `sessionId` from first active session for `DELETE /auth/sessions/:id`
+  - asserts `refreshTokenHash` is never present
 - Refresh tests:
   - read `{ accessToken }` JSON response
   - overwrite `accessTokenUser` / `accessTokenAdmin`
@@ -61,8 +70,6 @@ Defaults are aligned with `.env.example`.
 ## Suggested scenario (User)
 
 1. Login (user)
-2. Me (GET)
-3. Refresh
-4. Me (GET)
-5. Logout
-6. Refresh (expect 401)
+2. Sessions (GET)
+3. Sessions revoke all (DELETE)
+4. Refresh after logout all (expect 401)

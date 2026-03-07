@@ -26,6 +26,12 @@ export class RefreshSession {
 
   @Prop()
   userAgent?: string;
+
+  @Prop()
+  lastUsedAt?: Date;
+
+  @Prop()
+  deviceLabel?: string;
 }
 
 export const RefreshSessionSchema =

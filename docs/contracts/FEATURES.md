@@ -14,6 +14,11 @@
 - `PATCH /me`
 - `DELETE /me`
 
+### Protected (JWT, self session management)
+- `GET /auth/sessions`
+- `DELETE /auth/sessions/:id`
+- `DELETE /auth/sessions` (logout all devices)
+
 ### Protected (JWT + role `admin`)
 - `GET /admin/users`
 - `PATCH /admin/users/:id`
@@ -32,7 +37,9 @@
 - Rotation on each `POST /auth/refresh`:
   - old refresh session is revoked (`revokedAt`)
   - new refresh session is created (`rotatedFromHash` references old hash)
+  - the new session gets `lastUsedAt=now` on successful refresh
 - Multi-device supported: one refresh session per login/device.
+- Session cap: `MAX_SESSIONS_PER_USER` (default `10`). If exceeded on login/refresh rotation, the oldest active sessions (`createdAt` ascending) are revoked to get back under the cap.
 
 ## RefreshSession persistence
 
@@ -44,6 +51,8 @@ Collection: `RefreshSession`
 - `revokedAt?`
 - `rotatedFromHash?`
 - `userAgent?`
+- `lastUsedAt?`
+- `deviceLabel?` (optional MVP field)
 
 Storage notes:
 - `userAgent` is stored.
@@ -77,3 +86,8 @@ Rules:
 
 `POST /auth/login` returns 401 with this exact message for invalid email or password:
 - `Unauthorized: invalid credentials or user not found.`
+
+## Sessions API safety
+
+- Session listing endpoints never expose `refreshTokenHash` or raw refresh tokens.
+- Returned session shape includes only: `id`, `createdAt`, `expiresAt`, `revokedAt`, `lastUsedAt`, `userAgent`.
