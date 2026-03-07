@@ -55,6 +55,21 @@ En strict mode, `JWT_SECRET` faible/placeholder est refusé (minimum 16 caractè
 - Production: utiliser `.env.example.prod` comme référence de structure, **sans jamais commiter de secret réel**.
 - En prod, injecter les valeurs finales via secret manager / CI (pas via fichiers versionnés).
 
+## CI/CD
+
+- CI GitHub Actions: lint + e2e à chaque PR vers `master` et à chaque push sur `master` (tests unitaires désactivés temporairement tant qu’aucun `*.spec.ts` n’existe).
+- CD GitHub Actions: build et publication de l’image Docker sur GHCR à chaque push sur `master`.
+- Image publiée: `ghcr.io/<owner>/auth-service`
+  - `:main` (tag mouvant)
+  - `:sha-<commit_sha>` (tag immuable recommandé pour déploiement)
+
+## Infra contract
+
+- Contrat d’intégration infra: `docs/infra/INFRA_CONTRACT.md`
+- Snippet compose: `docs/infra/docker-compose.snippet.yml`
+- Template variables infra: `docs/infra/env.infra.example`
+- Rappel: ne jamais committer de secret (`.env`, mots de passe, clés) dans le repository.
+
 
 ## Angular integration (cookies + refresh)
 

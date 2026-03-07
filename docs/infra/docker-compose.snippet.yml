@@ -1,0 +1,29 @@
+services:
+  auth-service:
+    image: ghcr.io/__OWNER__/auth-service:sha-__COMMIT_SHA__
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: ${DATABASE_URL}
+      DB_NAME: ${DB_NAME}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      NODE_ENV: ${NODE_ENV}
+      STRICT_ENV: ${STRICT_ENV}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_PSEUDO: ${ADMIN_PSEUDO}
+      JWT_ISSUER: ${JWT_ISSUER:-}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth_db
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  auth_db:
+    image: mongo:7
