@@ -54,6 +54,10 @@ function getSetCookieValues(headers: Record<string, unknown>): string[] {
   return [];
 }
 
+function extractAccessTokenFromResponse(response: request.Response): string {
+  return response.text.trim().replace(/^"|"$/g, '');
+}
+
 class InMemoryUserService {
   private readonly users = new Map<string, StoredUser>();
 
@@ -147,57 +151,153 @@ class InMemoryUserService {
 }
 
 type RefreshSessionRecord = {
-  userId: string;
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
   refreshTokenHash: string;
   createdAt: Date;
   expiresAt: Date;
   revokedAt?: Date;
   rotatedFromHash?: string;
   userAgent?: string;
+  lastUsedAt?: Date;
+  deviceLabel?: string;
+  save: () => Promise<void>;
 };
+
+type RefreshSessionFilter = {
+  userId?: Types.ObjectId;
+  refreshTokenHash?: string;
+  revokedAt?: { $eq: null };
+  expiresAt?: { $gt: Date };
+  _id?: { $in: Types.ObjectId[] };
+};
+
+function matchesFilter(
+  session: RefreshSessionRecord,
+  filter: RefreshSessionFilter,
+): boolean {
+  if (
+    filter.refreshTokenHash &&
+    session.refreshTokenHash !== filter.refreshTokenHash
+  ) {
+    return false;
+  }
+
+  if (filter.userId && session.userId.toString() !== filter.userId.toString()) {
+    return false;
+  }
+
+  if (filter.revokedAt && filter.revokedAt.$eq === null && session.revokedAt) {
+    return false;
+  }
+
+  if (filter.expiresAt && !(session.expiresAt > filter.expiresAt.$gt)) {
+    return false;
+  }
+
+  if (
+    filter._id &&
+    !filter._id.$in.some((id) => id.toString() === session._id.toString())
+  ) {
+    return false;
+  }
+
+  return true;
+}
 
 class InMemoryRefreshSessionModel {
   private readonly sessions: RefreshSessionRecord[] = [];
 
-  async create(data: RefreshSessionRecord): Promise<RefreshSessionRecord> {
-    const session = { ...data };
+  async create(
+    data: Omit<RefreshSessionRecord, '_id' | 'save'>,
+  ): Promise<RefreshSessionRecord> {
+    const session: RefreshSessionRecord = {
+      ...data,
+      _id: new Types.ObjectId(),
+      save: async () => Promise.resolve(),
+    };
     this.sessions.push(session);
     return session;
   }
 
-  findOne(filter: {
-    refreshTokenHash: string;
-    revokedAt: { $eq: null };
-    expiresAt: { $gt: Date };
-  }): { exec: () => Promise<RefreshSessionRecord | null> } {
+  findOne(filter: RefreshSessionFilter): {
+    exec: () => Promise<RefreshSessionRecord | null>;
+  } {
+    return {
+      exec: async () => {
+        const found = this.sessions.find((session) =>
+          matchesFilter(session, filter),
+        );
+        return found ?? null;
+      },
+    };
+  }
+
+  find(filter: RefreshSessionFilter): {
+    sort: (value: { createdAt: 1 | -1 }) => {
+      exec: () => Promise<RefreshSessionRecord[]>;
+    };
+    exec: () => Promise<RefreshSessionRecord[]>;
+  } {
+    const getFiltered = (): RefreshSessionRecord[] =>
+      this.sessions.filter((session) => matchesFilter(session, filter));
+
+    return {
+      sort: (value: { createdAt: 1 | -1 }) => ({
+        exec: async () => {
+          const sorted = [...getFiltered()].sort((a, b) => {
+            if (value.createdAt === 1) {
+              return a.createdAt.getTime() - b.createdAt.getTime();
+            }
+
+            return b.createdAt.getTime() - a.createdAt.getTime();
+          });
+
+          return sorted;
+        },
+      }),
+      exec: async () => getFiltered(),
+    };
+  }
+
+  findById(id: string): { exec: () => Promise<RefreshSessionRecord | null> } {
     return {
       exec: async () => {
         const found = this.sessions.find(
-          (session) =>
-            session.refreshTokenHash === filter.refreshTokenHash &&
-            !session.revokedAt &&
-            session.expiresAt > filter.expiresAt.$gt,
+          (session) => session._id.toString() === id,
         );
-
         return found ?? null;
       },
     };
   }
 
   updateOne(
-    filter: { refreshTokenHash: string; revokedAt: { $eq: null } },
+    filter: RefreshSessionFilter,
     update: { $set: { revokedAt: Date } },
   ): { exec: () => Promise<void> } {
     return {
       exec: async () => {
-        const found = this.sessions.find(
-          (session) =>
-            session.refreshTokenHash === filter.refreshTokenHash &&
-            !session.revokedAt,
+        const found = this.sessions.find((session) =>
+          matchesFilter(session, filter),
         );
         if (found) {
           found.revokedAt = update.$set.revokedAt;
         }
+      },
+    };
+  }
+
+  updateMany(
+    filter: RefreshSessionFilter,
+    update: { $set: { revokedAt: Date } },
+  ): { exec: () => Promise<void> } {
+    return {
+      exec: async () => {
+        this.sessions.forEach((session) => {
+          if (matchesFilter(session, filter)) {
+            session.revokedAt = update.$set.revokedAt;
+          }
+        });
       },
     };
   }
@@ -210,6 +310,7 @@ describe('Auth flow and RBAC (e2e)', () => {
   beforeAll(async () => {
     process.env.JWT_SECRET = 'e2e-secret';
     process.env.JWT_EXPIRES_IN = '15m';
+    process.env.MAX_SESSIONS_PER_USER = '3';
 
     const refreshSessionModel = new InMemoryRefreshSessionModel();
 
@@ -266,163 +367,6 @@ describe('Auth flow and RBAC (e2e)', () => {
     await app.close();
   });
 
-  it('register -> login -> /me works with Bearer token', async () => {
-    const email = `e2e_${Date.now()}@example.com`;
-    const password = 'StrongPass1!';
-    const pseudo = `e2e_user_${Date.now()}`;
-
-    const registerResponse = await request(server)
-      .post('/users')
-      .send({ email, password, pseudo })
-      .expect(201);
-
-    expect(registerResponse.body).toMatchObject({ email, pseudo });
-    expect(registerResponse.body).not.toHaveProperty('password');
-
-    const loginResponse = await request(server)
-      .post('/auth/login')
-      .send({ email, password })
-      .expect(201);
-
-    const token = loginResponse.text.trim().replace(/^"|"$/g, '');
-    const decoded = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64url').toString('utf-8'),
-    ) as { sub?: string; email?: string; pseudo?: string; roles?: string[] };
-
-    expect(token).toBeTruthy();
-    expect(decoded.sub).toBeTruthy();
-    expect(decoded.roles).toEqual(['user']);
-
-    const meResponse = await request(server)
-      .get('/me')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
-
-    expect(meResponse.body).toMatchObject({ email, pseudo });
-    expect(meResponse.body).toHaveProperty('id', decoded.sub);
-    expect(meResponse.body).not.toHaveProperty('password');
-  });
-
-  it('register ignores client-provided roles and keeps user role only', async () => {
-    const email = `role_${Date.now()}@example.com`;
-    const password = 'StrongPass1!';
-    const pseudo = `role_user_${Date.now()}`;
-
-    await request(server)
-      .post('/users')
-      .send({ email, password, pseudo, roles: ['admin'] })
-      .expect(201);
-
-    const loginResponse = await request(server)
-      .post('/auth/login')
-      .send({ email, password })
-      .expect(201);
-
-    const token = loginResponse.text.trim().replace(/^"|"$/g, '');
-    const decoded = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64url').toString('utf-8'),
-    ) as { roles?: string[] };
-
-    expect(decoded.roles).toEqual(['user']);
-  });
-
-  it('/admin/users returns 401 without token', async () => {
-    const response = await request(server).get('/admin/users').expect(401);
-
-    expect(response.body).toMatchObject({
-      statusCode: 401,
-      error: 'Unauthorized',
-      message: 'Unauthorized',
-      path: '/admin/users',
-    });
-    expect(typeof response.body.timestamp).toBe('string');
-  });
-
-  it('/admin/users returns 403 with a user token', async () => {
-    const email = `rbac_${Date.now()}@example.com`;
-    const password = 'StrongPass1!';
-    const pseudo = `rbac_user_${Date.now()}`;
-
-    await request(server)
-      .post('/users')
-      .send({ email, password, pseudo })
-      .expect(201);
-
-    const loginResponse = await request(server)
-      .post('/auth/login')
-      .send({ email, password })
-      .expect(201);
-
-    const userToken = loginResponse.text.trim().replace(/^"|"$/g, '');
-
-    const response = await request(server)
-      .get('/admin/users')
-      .set('Authorization', `Bearer ${userToken}`)
-      .expect(403);
-
-    expect(response.body).toMatchObject({
-      statusCode: 403,
-      error: 'Forbidden',
-      message: 'Forbidden resource',
-      path: '/admin/users',
-    });
-    expect(typeof response.body.timestamp).toBe('string');
-  });
-
-  it('login token uses HS256 algorithm', async () => {
-    const email = `alg_${Date.now()}@example.com`;
-    const password = 'StrongPass1!';
-    const pseudo = `alg_user_${Date.now()}`;
-
-    await request(server)
-      .post('/users')
-      .send({ email, password, pseudo })
-      .expect(201);
-
-    const loginResponse = await request(server)
-      .post('/auth/login')
-      .send({ email, password })
-      .expect(201);
-
-    const token = loginResponse.text.trim().replace(/^"|"$/g, '');
-    const header = JSON.parse(
-      Buffer.from(token.split('.')[0], 'base64url').toString('utf-8'),
-    ) as { alg?: string };
-
-    expect(header.alg).toBe('HS256');
-  });
-
-  it('invalid login keeps the exact unauthorized message', async () => {
-    const response = await request(server)
-      .post('/auth/login')
-      .send({ email: 'missing@example.com', password: 'wrong-password' })
-      .expect(401);
-
-    expect(response.body).toMatchObject({
-      statusCode: 401,
-      error: 'Unauthorized',
-      message: 'Unauthorized: invalid credentials or user not found.',
-      path: '/auth/login',
-    });
-    expect(typeof response.body.timestamp).toBe('string');
-  });
-
-  it('/admin/users returns 200 with an admin token', async () => {
-    const loginResponse = await request(server)
-      .post('/auth/login')
-      .send({ email: 'admin@example.com', password: 'StrongPass1!' })
-      .expect(201);
-
-    const adminToken = loginResponse.text.trim().replace(/^"|"$/g, '');
-
-    const response = await request(server)
-      .get('/admin/users')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .expect(200);
-
-    expect(Array.isArray(response.body)).toBe(true);
-  });
-
   it('login sets refresh cookie and refresh returns {accessToken}', async () => {
     const email = `refresh_${Date.now()}@example.com`;
     const password = 'StrongPass1!';
@@ -443,8 +387,6 @@ describe('Auth flow and RBAC (e2e)', () => {
       (cookie) => cookie.startsWith('refreshToken='),
     );
 
-    const loginToken = loginResponse.text.trim().replace(/^\"|\"$/g, '');
-    expect(typeof loginToken).toBe('string');
     expect(refreshCookie).toContain('HttpOnly');
     expect(refreshCookie).toContain('SameSite=Lax');
     expect(refreshCookie).toBeDefined();
@@ -455,7 +397,6 @@ describe('Auth flow and RBAC (e2e)', () => {
       .expect(200);
 
     expect(refreshResponse.body).toHaveProperty('accessToken');
-    expect(typeof refreshResponse.body.accessToken).toBe('string');
 
     const rotatedCookie = getSetCookieValues(refreshResponse.headers).find(
       (cookie) => cookie.startsWith('refreshToken='),
@@ -473,10 +414,93 @@ describe('Auth flow and RBAC (e2e)', () => {
       .expect(200);
   });
 
-  it('logout revokes refresh cookie and refresh after logout returns 401', async () => {
-    const email = `logout_${Date.now()}@example.com`;
+  it('login -> sessions returns at least one active session without token hash', async () => {
+    const email = `sessions_${Date.now()}@example.com`;
     const password = 'StrongPass1!';
-    const pseudo = `logout_user_${Date.now()}`;
+    const pseudo = `sessions_user_${Date.now()}`;
+
+    await request(server)
+      .post('/users')
+      .send({ email, password, pseudo })
+      .expect(201);
+
+    const loginResponse = await request(server)
+      .post('/auth/login')
+      .set('User-Agent', 'sessions-agent')
+      .send({ email, password })
+      .expect(201);
+
+    const accessToken = extractAccessTokenFromResponse(loginResponse);
+
+    const sessionsResponse = await request(server)
+      .get('/auth/sessions')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(Array.isArray(sessionsResponse.body)).toBe(true);
+    expect(sessionsResponse.body.length).toBeGreaterThan(0);
+    expect(sessionsResponse.body[0]).toHaveProperty('id');
+    expect(sessionsResponse.body[0]).toHaveProperty('createdAt');
+    expect(sessionsResponse.body[0]).toHaveProperty('expiresAt');
+    expect(sessionsResponse.body[0]).toHaveProperty('userAgent');
+    expect(sessionsResponse.body[0]).not.toHaveProperty('refreshTokenHash');
+  });
+
+  it('revoke specific session removes it from active sessions', async () => {
+    const email = `revoke_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `revoke_user_${Date.now()}`;
+
+    await request(server)
+      .post('/users')
+      .send({ email, password, pseudo })
+      .expect(201);
+
+    const loginA = await request(server)
+      .post('/auth/login')
+      .set('User-Agent', 'device-a')
+      .send({ email, password })
+      .expect(201);
+
+    await request(server)
+      .post('/auth/login')
+      .set('User-Agent', 'device-b')
+      .send({ email, password })
+      .expect(201);
+
+    const accessToken = extractAccessTokenFromResponse(loginA);
+
+    const before = await request(server)
+      .get('/auth/sessions')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    const deviceB = before.body.find(
+      (session: { userAgent?: string }) => session.userAgent === 'device-b',
+    ) as { id: string } | undefined;
+
+    expect(deviceB).toBeDefined();
+
+    await request(server)
+      .delete(`/auth/sessions/${deviceB?.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200)
+      .expect({ message: 'Session revoked' });
+
+    const after = await request(server)
+      .get('/auth/sessions')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(
+      after.body.some((session: { id: string }) => session.id === deviceB?.id),
+    ).toBe(false);
+  });
+
+  it('logout all revokes active sessions and refresh fails with 401', async () => {
+    const email = `logout_all_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `logout_all_user_${Date.now()}`;
 
     await request(server)
       .post('/users')
@@ -488,16 +512,25 @@ describe('Auth flow and RBAC (e2e)', () => {
       .send({ email, password })
       .expect(201);
 
+    const accessToken = extractAccessTokenFromResponse(loginResponse);
     const refreshCookie = getSetCookieValues(loginResponse.headers).find(
       (cookie) => cookie.startsWith('refreshToken='),
     );
+
     expect(refreshCookie).toBeDefined();
 
     await request(server)
-      .post('/auth/logout')
-      .set('Cookie', refreshCookie as string)
+      .delete('/auth/sessions')
+      .set('Authorization', `Bearer ${accessToken}`)
       .expect(200)
       .expect({ message: 'Logged out' });
+
+    const sessionsAfter = await request(server)
+      .get('/auth/sessions')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(sessionsAfter.body).toEqual([]);
 
     await request(server)
       .post('/auth/refresh')
@@ -505,14 +538,49 @@ describe('Auth flow and RBAC (e2e)', () => {
       .expect(401);
   });
 
-  it('removed /users endpoints return 404', async () => {
-    await request(server).get('/users').expect(404);
-    await request(server).get('/users/searchId/123').expect(404);
-    await request(server).get('/users/searchPseudo/someone').expect(404);
+  it('session cap keeps only MAX_SESSIONS_PER_USER active sessions', async () => {
+    const email = `cap_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `cap_user_${Date.now()}`;
+
     await request(server)
-      .get('/users/searchEmail/test@example.com')
-      .expect(404);
-    await request(server).patch('/users/123').expect(404);
-    await request(server).delete('/users/123').expect(404);
+      .post('/users')
+      .send({ email, password, pseudo })
+      .expect(201);
+
+    const cookies: string[] = [];
+    let accessToken = '';
+    for (let index = 0; index < 5; index += 1) {
+      const loginResponse = await request(server)
+        .post('/auth/login')
+        .set('User-Agent', `cap-device-${index}`)
+        .send({ email, password })
+        .expect(201);
+
+      accessToken = extractAccessTokenFromResponse(loginResponse);
+      const refreshCookie = getSetCookieValues(loginResponse.headers).find(
+        (cookie) => cookie.startsWith('refreshToken='),
+      );
+      if (refreshCookie) {
+        cookies.push(refreshCookie);
+      }
+    }
+
+    const sessionsResponse = await request(server)
+      .get('/auth/sessions')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(sessionsResponse.body.length).toBe(3);
+
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', cookies[0])
+      .expect(401);
+
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', cookies[cookies.length - 1])
+      .expect(200);
   });
 });

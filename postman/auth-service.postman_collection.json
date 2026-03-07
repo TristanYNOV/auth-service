@@ -166,6 +166,103 @@
           ]
         },
         {
+          "name": "Sessions (GET)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessTokenUser}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/sessions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const sessions = pm.response.json();",
+                  "pm.test('sessions is array', function () { pm.expect(Array.isArray(sessions)).to.eql(true); });",
+                  "if (sessions.length > 0) { pm.collectionVariables.set('sessionId', sessions[0].id); }",
+                  "pm.test('refresh token hash is never exposed', function () {",
+                  "  if (sessions.length > 0) { pm.expect(sessions[0]).to.not.have.property('refreshTokenHash'); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Session revoke by id (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessTokenUser}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/sessions/{{sessionId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sessions revoke all (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessTokenUser}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/sessions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh after logout all (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/refresh"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Refresh after Logout (expect 401)",
           "request": {
             "method": "POST",
@@ -475,6 +572,10 @@
     },
     {
       "key": "accessTokenAdmin",
+      "value": ""
+    },
+    {
+      "key": "sessionId",
       "value": ""
     }
   ]
