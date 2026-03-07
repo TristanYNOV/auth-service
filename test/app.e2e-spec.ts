@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -75,8 +76,9 @@ class InMemoryUserService {
   }
 
   async countAdminUsers(): Promise<number> {
-    return Array.from(this.users.values()).filter((u) => u.roles.includes('admin'))
-      .length;
+    return Array.from(this.users.values()).filter((u) =>
+      u.roles.includes('admin'),
+    ).length;
   }
 
   async getAllUsers(): Promise<Array<Omit<StoredUser, 'password'>>> {
@@ -139,10 +141,18 @@ describe('Auth flow and RBAC (e2e)', () => {
         PassportModule,
         JwtModule.register({
           secret: process.env.JWT_SECRET,
-          signOptions: { expiresIn: process.env.JWT_EXPIRES_IN },
+          signOptions: {
+            algorithm: 'HS256',
+            expiresIn: process.env.JWT_EXPIRES_IN,
+          },
         }),
       ],
-      controllers: [UserController, AuthController, MeController, AdminController],
+      controllers: [
+        UserController,
+        AuthController,
+        MeController,
+        AdminController,
+      ],
       providers: [
         { provide: UserService, useClass: InMemoryUserService },
         AuthService,
@@ -159,6 +169,7 @@ describe('Auth flow and RBAC (e2e)', () => {
         whitelist: true,
       }),
     );
+    app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
     const userService = moduleFixture.get<UserService>(UserService);
@@ -210,7 +221,6 @@ describe('Auth flow and RBAC (e2e)', () => {
     expect(meResponse.body).not.toHaveProperty('password');
   });
 
-
   it('register ignores client-provided roles and keeps user role only', async () => {
     const email = `role_${Date.now()}@example.com`;
     const password = 'StrongPass1!';
@@ -235,7 +245,17 @@ describe('Auth flow and RBAC (e2e)', () => {
   });
 
   it('/admin/users returns 401 without token', async () => {
-    await request(app.getHttpServer()).get('/admin/users').expect(401);
+    const response = await request(app.getHttpServer())
+      .get('/admin/users')
+      .expect(401);
+
+    expect(response.body).toMatchObject({
+      statusCode: 401,
+      error: 'Unauthorized',
+      message: 'Unauthorized',
+      path: '/admin/users',
+    });
+    expect(typeof response.body.timestamp).toBe('string');
   });
 
   it('/admin/users returns 403 with a user token', async () => {
@@ -255,10 +275,56 @@ describe('Auth flow and RBAC (e2e)', () => {
 
     const userToken = loginResponse.text.trim().replace(/^"|"$/g, '');
 
-    await request(app.getHttpServer())
+    const response = await request(app.getHttpServer())
       .get('/admin/users')
       .set('Authorization', `Bearer ${userToken}`)
       .expect(403);
+
+    expect(response.body).toMatchObject({
+      statusCode: 403,
+      error: 'Forbidden',
+      message: 'Forbidden resource',
+      path: '/admin/users',
+    });
+    expect(typeof response.body.timestamp).toBe('string');
+  });
+
+  it('login token uses HS256 algorithm', async () => {
+    const email = `alg_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `alg_user_${Date.now()}`;
+
+    await request(app.getHttpServer())
+      .post('/users')
+      .send({ email, password, pseudo })
+      .expect(201);
+
+    const loginResponse = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+
+    const token = loginResponse.text.trim().replace(/^"|"$/g, '');
+    const header = JSON.parse(
+      Buffer.from(token.split('.')[0], 'base64url').toString('utf-8'),
+    ) as { alg?: string };
+
+    expect(header.alg).toBe('HS256');
+  });
+
+  it('invalid login keeps the exact unauthorized message', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'missing@example.com', password: 'wrong-password' })
+      .expect(401);
+
+    expect(response.body).toMatchObject({
+      statusCode: 401,
+      error: 'Unauthorized',
+      message: 'Unauthorized: invalid credentials or user not found.',
+      path: '/auth/login',
+    });
+    expect(typeof response.body.timestamp).toBe('string');
   });
 
   it('/admin/users returns 200 with an admin token', async () => {

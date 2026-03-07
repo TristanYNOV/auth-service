@@ -19,6 +19,7 @@
   - Admin - Patch User
   - Admin - Delete User
   - Admin - User tries admin (expect 403)
+  - Admin - No token (expect 401)
 
 ## Environment variables
 
@@ -28,6 +29,8 @@ Both environments include:
 - `baseUrlDirect`
 - `adminEmail`
 - `adminPassword`
+- `jwtIssuer` (optional)
+- `jwtAudience` (optional)
 
 Defaults are aligned with `.env.example`.
 
@@ -42,8 +45,12 @@ Defaults are aligned with `.env.example`.
   - randomizes `userEmail`, `userPseudo`, `userPassword`
 - Login (user) tests:
   - stores `accessTokenUser`
-  - decodes payload and stores `userId = sub`
+  - decodes header/payload and stores `userId = sub`
+  - asserts JWT header `alg === HS256`
+  - validates `iss` / `aud` only if present in token and expected env values are set
 - Admin - Login tests:
   - stores `accessTokenAdmin`
-  - decodes payload and stores `adminUserId = sub`
   - asserts `roles` contains `admin`
+  - asserts JWT header `alg === HS256`
+- Admin access tests:
+  - assert status and stable error contract shape for `401` and `403`

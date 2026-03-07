@@ -53,7 +53,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"pseudo\": \"{{userPseudo}}\",\n  \"password\": \"{{userPassword}}\"\n}"
@@ -71,15 +76,40 @@
                 "exec": [
                   "const token = pm.response.text().replace(/^\"|\"$/g, '');",
                   "pm.collectionVariables.set('accessTokenUser', token);",
-                  "const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
-                  "pm.collectionVariables.set('userId', payload.sub);"
+                  "const decodePart = (part) => JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));",
+                  "const header = decodePart(token.split('.')[0]);",
+                  "const payload = decodePart(token.split('.')[1]);",
+                  "pm.collectionVariables.set('userId', payload.sub);",
+                  "pm.test('JWT alg is HS256', function () {",
+                  "  pm.expect(header.alg).to.eql('HS256');",
+                  "});",
+                  "if (payload.iss && pm.environment.get('jwtIssuer')) {",
+                  "  pm.test('JWT issuer matches env when present', function () {",
+                  "    pm.expect(payload.iss).to.eql(pm.environment.get('jwtIssuer'));",
+                  "  });",
+                  "}",
+                  "if (payload.aud && pm.environment.get('jwtAudience')) {",
+                  "  pm.test('JWT audience matches env when present', function () {",
+                  "    const expected = pm.environment.get('jwtAudience');",
+                  "    if (Array.isArray(payload.aud)) {",
+                  "      pm.expect(payload.aud).to.include(expected);",
+                  "    } else {",
+                  "      pm.expect(payload.aud).to.eql(expected);",
+                  "    }",
+                  "  });",
+                  "}"
                 ]
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
@@ -89,20 +119,34 @@
         },
         {
           "name": "Me (GET)",
-          "request": { "method": "GET", "url": "{{baseUrl}}/me" }
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/me"
+          }
         },
         {
           "name": "Me (PATCH)",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"pseudo\": \"{{userPseudo}}_updated\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pseudo\": \"{{userPseudo}}_updated\"\n}"
+            },
             "url": "{{baseUrl}}/me"
           }
         },
         {
           "name": "Me (DELETE)",
-          "request": { "method": "DELETE", "url": "{{baseUrl}}/me" }
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/me"
+          }
         }
       ]
     },
@@ -119,11 +163,16 @@
                 "exec": [
                   "const token = pm.response.text().replace(/^\"|\"$/g, '');",
                   "pm.collectionVariables.set('accessTokenAdmin', token);",
-                  "const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "const decodePart = (part) => JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));",
+                  "const header = decodePart(token.split('.')[0]);",
+                  "const payload = decodePart(token.split('.')[1]);",
                   "pm.collectionVariables.set('adminUserId', payload.sub);",
                   "pm.test('roles contains admin', function () {",
                   "  pm.expect(Array.isArray(payload.roles)).to.equal(true);",
                   "  pm.expect(payload.roles.includes('admin')).to.equal(true);",
+                  "});",
+                  "pm.test('JWT alg is HS256', function () {",
+                  "  pm.expect(header.alg).to.eql('HS256');",
                   "});"
                 ]
               }
@@ -131,7 +180,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
@@ -141,14 +195,25 @@
         },
         {
           "name": "Admin - List Users",
-          "request": { "method": "GET", "url": "{{baseUrl}}/admin/users" }
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/users"
+          }
         },
         {
           "name": "Admin - Patch User",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"pseudo\": \"patched_by_admin\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pseudo\": \"patched_by_admin\"\n}"
+            },
             "url": "{{baseUrl}}/admin/users/{{userId}}"
           }
         },
@@ -179,6 +244,53 @@
                 "exec": [
                   "pm.test('status is 403', function () {",
                   "  pm.response.to.have.status(403);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('error contract is stable (403)', function () {",
+                  "  pm.expect(body).to.have.property('statusCode', 403);",
+                  "  pm.expect(body).to.have.property('error');",
+                  "  pm.expect(body).to.have.property('message');",
+                  "  pm.expect(body).to.have.property('timestamp');",
+                  "  pm.expect(body).to.have.property('path');",
+                  "  pm.expect(typeof body.message).to.eql('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/users"
+          }
+        },
+        {
+          "name": "Admin - No token (expect 401)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.remove('Authorization');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('error contract is stable (401)', function () {",
+                  "  pm.expect(body).to.have.property('statusCode', 401);",
+                  "  pm.expect(body).to.have.property('error');",
+                  "  pm.expect(body).to.have.property('message');",
+                  "  pm.expect(body).to.have.property('timestamp');",
+                  "  pm.expect(body).to.have.property('path');",
+                  "  pm.expect(typeof body.message).to.eql('string');",
                   "});"
                 ]
               }
@@ -193,13 +305,37 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "" },
-    { "key": "userEmail", "value": "" },
-    { "key": "userPseudo", "value": "" },
-    { "key": "userPassword", "value": "" },
-    { "key": "userId", "value": "" },
-    { "key": "adminUserId", "value": "" },
-    { "key": "accessTokenUser", "value": "" },
-    { "key": "accessTokenAdmin", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": ""
+    },
+    {
+      "key": "userEmail",
+      "value": ""
+    },
+    {
+      "key": "userPseudo",
+      "value": ""
+    },
+    {
+      "key": "userPassword",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "adminUserId",
+      "value": ""
+    },
+    {
+      "key": "accessTokenUser",
+      "value": ""
+    },
+    {
+      "key": "accessTokenAdmin",
+      "value": ""
+    }
   ]
 }

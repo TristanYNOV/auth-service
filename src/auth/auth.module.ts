@@ -4,11 +4,28 @@ import { AuthService } from './auth.service';
 import { UserService } from '../user/User.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from '../schemas/User.schema';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import * as process from 'node:process';
 import { PassportModule } from '@nestjs/passport';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+
+function buildSignOptions(): JwtSignOptions {
+  const signOptions: JwtSignOptions = {
+    algorithm: 'HS256',
+    expiresIn: process.env.JWT_EXPIRES_IN as string,
+  };
+
+  if (process.env.JWT_ISSUER) {
+    signOptions.issuer = process.env.JWT_ISSUER;
+  }
+
+  if (process.env.JWT_AUDIENCE) {
+    signOptions.audience = process.env.JWT_AUDIENCE;
+  }
+
+  return signOptions;
+}
 
 @Module({
   imports: [
@@ -20,8 +37,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     ]),
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'secret',
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '30d' },
+      secret: process.env.JWT_SECRET as string,
+      signOptions: buildSignOptions(),
     }),
   ],
   controllers: [AuthController],

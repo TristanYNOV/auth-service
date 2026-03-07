@@ -11,34 +11,28 @@ La réponse est une chaîne JWT brute (pas un objet JSON).
 ## Signature / secret
 
 Configuration `JwtModule.register` :
-- `secret = process.env.JWT_SECRET || 'secret'`
-
-## Expiration
-
-Configuration `signOptions.expiresIn` :
-- `process.env.JWT_EXPIRES_IN || '30d'`
+- `secret = JWT_SECRET` (obligatoire)
+- `signOptions.algorithm = 'HS256'` (explicite)
+- `signOptions.expiresIn = JWT_EXPIRES_IN` (obligatoire)
 
 ## Claims émis
 
-Le service récupère un document utilisateur Mongo, retire `password`, puis signe le reste.
-En pratique, claims attendus au minimum (selon user trouvé):
-- `_id`
-- `pseudo`
+Payload signé:
+- `sub`
 - `email`
+- `pseudo`
+- `roles`
 
-D’autres champs mongoose internes peuvent apparaître selon la forme effective de l’objet signé.
+## Claims optionnels
+
+- Si `JWT_ISSUER` est défini, `issuer` est ajouté à la signature et validé côté stratégie.
+- Si `JWT_AUDIENCE` est défini, `audience` est ajouté à la signature et validé côté stratégie.
+- Si ces variables sont absentes, aucune contrainte `iss/aud` n’est imposée.
 
 ## Validation
 
 La stratégie JWT lit le token via `Authorization: Bearer <token>` et valide:
-- signature avec le même secret,
-- expiration (`ignoreExpiration: false`).
-
-Le payload validé est renvoyé tel quel (`validate(payload) { return payload; }`).
-
-## TODO sécurité JWT
-
-- Supprimer le secret par défaut en environnement non-dev.
-- Définir explicitement un schéma de claims (sub, iat, exp, éventuellement iss/aud).
-- Ajouter rotation/gestion de clé.
-- Ajouter refresh token si requis par le produit.
+- signature HS256,
+- expiration (`ignoreExpiration: false`),
+- secret via `JWT_SECRET`,
+- issuer/audience uniquement si configurés.
