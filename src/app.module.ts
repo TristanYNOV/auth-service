@@ -11,12 +11,9 @@ import * as process from 'node:process';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    MongooseModule.forRoot(
-      process.env.DATABASE_URL || 'mongodb://localhost:3000',
-      {
-        dbName: process.env.DB_NAME || 'auth_db',
-      },
-    ),
+    MongooseModule.forRoot(process.env.DATABASE_URL as string, {
+      dbName: process.env.DB_NAME as string,
+    }),
     UserModule,
     AuthModule,
   ],

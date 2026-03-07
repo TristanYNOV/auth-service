@@ -30,6 +30,30 @@ npm run start:dev
 curl http://localhost:3000/health
 ```
 
+## Configuration obligatoire
+
+Les variables suivantes sont **obligatoires dans tous les environnements** (dev inclus):
+- `JWT_SECRET`
+- `DATABASE_URL`
+- `DB_NAME`
+- `JWT_EXPIRES_IN`
+
+Le service fail-fast au boot si l’une est absente ou vide. Aucun fallback n’est utilisé pour ces variables.
+
+## Strict mode
+
+Le mode strict active des contrôles de qualité supplémentaires sur les valeurs d’env (anti-placeholder / anti-secret faible):
+- actif automatiquement si `NODE_ENV=production`,
+- activable hors prod avec `STRICT_ENV=true`.
+
+En strict mode, `JWT_SECRET` faible/placeholder est refusé (minimum 16 caractères), ainsi que les placeholders `__CHANGE_ME__` sur `DB_NAME` et `DATABASE_URL`.
+
+## Templates d’environnement (Option B)
+
+- Développement: `cp .env.example .env` puis remplir toutes les variables.
+- Production: utiliser `.env.example.prod` comme référence de structure, **sans jamais commiter de secret réel**.
+- En prod, injecter les valeurs finales via secret manager / CI (pas via fichiers versionnés).
+
 ## Security highlights
 
 - RBAC with `roles: ('user'|'admin')[]` in user model.
@@ -39,6 +63,8 @@ curl http://localhost:3000/health
   - `>1` admins => fail-fast
 - Login errors are anti-enumeration:
   - `Unauthorized: invalid credentials or user not found.`
+- JWT signé et vérifié explicitement en `HS256`.
+- `iss` / `aud` supportés de façon optionnelle via `JWT_ISSUER` / `JWT_AUDIENCE`.
 - `/users` non-register endpoints were removed; user self-management goes through `/me`.
 
 ## Contracts (source of truth)
@@ -63,16 +89,22 @@ Choix B: MongoDB installé en local.
 ```env
 DATABASE_URL=mongodb://localhost:27017
 DB_NAME=auth_db
+JWT_SECRET=<votre_secret_partage>
+JWT_EXPIRES_IN=30d
+NODE_ENV=development
+STRICT_ENV=false
 ```
 
-Conserver aussi les variables JWT/SALT/ADMIN.
+Conserver aussi les variables `SALT` et `ADMIN_*`.
 
-### 3) Lancer Nest localement
+### 3) Lancer Nest localement (debug)
 
 ```bash
 npm install
 npm run start:dev
 ```
+
+Vous pouvez ensuite poser des breakpoints depuis votre IDE.
 
 ### 4) Connexion MongoDB Compass
 
