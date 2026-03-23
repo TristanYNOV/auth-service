@@ -1,4 +1,9 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+} from '@nestjs/common';
 import { User } from '../schemas/User.schema';
 import { Model } from 'mongoose';
 import { CreateUserDto } from './dto/CreateUser.dto';
@@ -16,8 +21,13 @@ export class UserService {
       ...createUserDto,
       roles: ['user'],
     });
+    return newUser.save().catch((error: { code?: number }) => {
+      if (error?.code === 11000) {
+        throw new ConflictException('Email already in use.');
+      }
 
-    return newUser.save();
+      throw error;
+    });
   }
 
   createAdminUser(payload: {
@@ -57,7 +67,11 @@ export class UserService {
         overwriteImmutable: true,
         projection: { password: 0 },
       });
-    } catch {
+    } catch (error) {
+      if ((error as { code?: number })?.code === 11000) {
+        throw new ConflictException('Email already in use.');
+      }
+
       throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
     }
   }
