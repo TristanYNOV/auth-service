@@ -55,7 +55,7 @@ function getSetCookieValues(headers: Record<string, unknown>): string[] {
 }
 
 function extractAccessTokenFromResponse(response: request.Response): string {
-  return response.text.trim().replace(/^"|"$/g, '');
+  return response.body.accessToken as string;
 }
 
 class InMemoryUserService {

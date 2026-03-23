@@ -87,6 +87,18 @@ Rules:
 `POST /auth/login` returns 401 with this exact message for invalid email or password:
 - `Unauthorized: invalid credentials or user not found.`
 
+## Token response contract
+
+- `POST /auth/login` and `POST /auth/refresh` both return:
+  - `{ "accessToken": "<jwt-access-token>" }`
+- This alignment avoids a frontend-specific branch between login and refresh flows.
+
+## Duplicate email conflict
+
+- `POST /users`, `PATCH /me`, and `PATCH /admin/users/:id` return `409` when email is already used.
+- Message:
+  - `Email already in use.`
+
 ## Sessions API safety
 
 - Session listing endpoints never expose `refreshTokenHash` or raw refresh tokens.

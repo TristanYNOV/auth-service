@@ -78,7 +78,7 @@ export class AuthController {
   async login(
     @Req() req: RequestWithTokenUser,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<string> {
+  ): Promise<{ accessToken: string }> {
     const refreshToken = this.authService.createRefreshToken();
     const refreshTokenHash = this.authService.hashRefreshToken(refreshToken);
 
@@ -90,7 +90,7 @@ export class AuthController {
 
     this.setRefreshCookie(res, refreshToken);
 
-    return req.user.accessToken;
+    return { accessToken: req.user.accessToken };
   }
 
   @Post('refresh')
