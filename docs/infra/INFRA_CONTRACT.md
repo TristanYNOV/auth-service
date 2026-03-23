@@ -1,23 +1,23 @@
-# Infra Contract — auth-service
+# INFRA_CONTRACT — auth-service
 
-## Purpose
-Ce document décrit le contrat d’intégration de `auth-service` dans un repo d’infrastructure (compose, swarm, k8s, etc.).
+## 1) Image et rôle du service
 
-## Docker image contract
+- Service: `auth-service`
+- Rôle: authentification, émission JWT d’accès, gestion sessions refresh, endpoints profil/admin.
 - Registry: `ghcr.io`
-- Repository: `ghcr.io/<owner>/auth-service`
+- Repository image: `ghcr.io/<owner>/auth-service`
 - Tags publiés:
-  - `:main` → tag mouvant (dernière version de la branche `master`)
-  - `:sha-<commit_sha>` → tag immuable (recommandé pour déploiements reproductibles)
+  - `main` (mouvant)
+  - `sha-<commit_sha>` (immuable, recommandé en production)
 
-**Recommandation:** utiliser `:sha-<commit_sha>` en production, garder `:main` pour environnements de dev/intégration.
+## 2) Port exposé
 
-## Runtime contract
-- Port interne exposé par le service: `3000`
-- Health endpoint: `GET /health` (attendu `200`)
+- Port interne service: `3000`
+- Exposition externe: via reverse proxy (Traefik) — publication directe du port **À confirmer** selon environnement.
 
-## Required environment variables
-Variables obligatoires au runtime:
+## 3) Variables d’environnement nécessaires
+
+Obligatoires:
 - `JWT_SECRET`
 - `DATABASE_URL`
 - `DB_NAME`
@@ -28,29 +28,45 @@ Variables obligatoires au runtime:
 - `ADMIN_PASSWORD`
 - `ADMIN_PSEUDO`
 
-> Les variables `ADMIN_*` sont nécessaires pour le bootstrap admin initial (premier démarrage, DB sans admin).
-
-## Optional environment variables
+Optionnelles:
 - `JWT_ISSUER`
 - `JWT_AUDIENCE`
 
-## Database contract
-- Moteur attendu: MongoDB
-- Exemple de valeur `DATABASE_URL`:
-  - `mongodb://auth_db:27017`
+## 4) Attentes reverse proxy / Traefik
 
-## Healthcheck contract
-- Endpoint: `GET /health`
-- Statut attendu: HTTP `200`
+- Exposition publique attendue sous `/api/auth/*`.
+- Suppression du préfixe `/api/auth` avant forward vers le service.
+- Exemple login:
+  - URL client: `/api/auth/auth/login`
+  - URL service: `/auth/login`
+- Pour refresh/logout: le client doit appeler avec credentials activées pour transporter le cookie `refreshToken`.
 
-## Cookies & CORS notes
-- Le refresh token est stocké en cookie `HttpOnly` avec `SameSite=Lax`.
-- Le flag `Secure` est activé uniquement en production.
-- Le front doit appeler les endpoints auth avec `credentials: true` (ou équivalent) pour transmettre le cookie.
+## 5) Dépendances
 
-## Deployment checklist
-- [ ] Utiliser une image GHCR avec tag immuable `sha-<commit_sha>`.
-- [ ] Fournir toutes les variables d’environnement requises.
-- [ ] Ne jamais committer de secrets dans le repo infra.
-- [ ] Vérifier la connectivité MongoDB (`DATABASE_URL`, `DB_NAME`).
-- [ ] Vérifier que `GET /health` répond `200` après déploiement.
+- MongoDB requis.
+- Exemple de connexion: `mongodb://auth_db:27017`
+- DB utilisée: variable `DB_NAME`.
+
+## 6) Santé et endpoints utiles
+
+- Health endpoint: `GET /health` attendu en `200`.
+- Endpoints utiles runbook:
+  - `POST /auth/login`
+  - `POST /auth/refresh`
+  - `POST /auth/logout`
+  - `GET /auth/sessions`
+
+## 7) Points de vigilance sécurité
+
+- Ne jamais committer de secrets (JWT, mots de passe admin).
+- Utiliser `STRICT_ENV=true` en production.
+- `JWT_SECRET` fort et non placeholder.
+- Le cookie refresh est `HttpOnly`; `Secure=true` en production.
+- Protéger l’accès admin via JWT rôle `admin`.
+
+## 8) Hypothèses de déploiement stables
+
+- Déploiement derrière Traefik same-origin avec front recommandé.
+- Endpoint santé utilisé pour readiness/liveness.
+- Image immuable `sha-<commit_sha>` en environnement stable.
+- Une unique instance admin logique est imposée par la donnée applicative (exactement un admin) ; stratégie multi-instance **À confirmer** côté orchestration.
