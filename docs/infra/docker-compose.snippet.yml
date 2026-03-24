@@ -1,6 +1,6 @@
 services:
   auth-service:
-    image: ghcr.io/__OWNER__/auth-service:sha-__COMMIT_SHA__
+    image: ghcr.io/__OWNER_LOWER__/auth-service:sha-__FULL_GIT_SHA__
     restart: unless-stopped
     environment:
       JWT_SECRET: ${JWT_SECRET}
