@@ -9,6 +9,7 @@ Service d’authentification du projet **Analyse Basket** (architecture microser
 - login avec JWT d’accès,
 - refresh/logout via cookie HttpOnly,
 - endpoints profil (`/me`),
+- endpoint interne de contexte d'identité pour gateway (`/internal/auth/context`),
 - endpoints admin (`/admin/users`),
 - endpoint de santé (`/health`).
 

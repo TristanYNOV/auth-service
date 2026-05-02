@@ -53,6 +53,14 @@ Optionnelles:
 ## 6) Santé et endpoints utiles
 
 - Health endpoint: `GET /health` attendu en `200`.
+- Endpoint forwardAuth interne: `GET /internal/auth/context`
+  - Entrée attendue: `Authorization: Bearer <jwt>`
+  - Succès: `200`
+  - Refus: `401` si JWT absent/invalide
+  - Headers de réponse à propager vers backend:
+    - `x-auth-user-id` (string)
+    - `x-auth-roles` (CSV)
+    - `x-auth-club-ids` (non fourni actuellement)
 - Endpoints utiles runbook:
   - `POST /auth/login`
   - `POST /auth/refresh`
