@@ -282,3 +282,21 @@ Exemple:
   "path": "/auth/login"
 }
 ```
+
+
+### 15) Internal Auth Context (gateway / inter-service)
+- **Méthode**: `GET`
+- **Chemin service**: `/internal/auth/context`
+- **Chemin via Traefik (exemple)**: `/api/auth/internal/auth/context`
+- **Objectif**: endpoint dédié `forwardAuth` pour valider le JWT access et exposer un contexte d’identité en headers de réponse
+- **Auth requise**: JWT Bearer valide (`Authorization: Bearer <jwt>`), pas de cookie refresh
+- **Headers de réponse (succès 200)**:
+  - `x-auth-user-id`: `sub` du JWT (string)
+  - `x-auth-roles`: rôles du JWT au format CSV (ex: `user` ou `user,admin`)
+  - `x-auth-club-ids`: non envoyé actuellement (claim non disponible dans le modèle JWT actuel)
+- **Payload**: aucun
+- **Succès**: `200` + body léger `{ "ok": true }`
+- **Erreurs principales**: `401` si token absent/invalide/expiré
+- **Remarques intégration**:
+  - Cette route est dédiée au gateway/service-to-service et ne remplace pas `/me`.
+  - Les headers `x-auth-*` sont calculés côté service à partir du JWT validé, jamais recopiés depuis des headers entrants fournis par le client.
