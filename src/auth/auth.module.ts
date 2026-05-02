@@ -13,6 +13,7 @@ import * as process from 'node:process';
 import { PassportModule } from '@nestjs/passport';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { InternalAuthController } from './internal-auth.controller';
 
 function buildSignOptions(): JwtSignOptions {
   const signOptions: JwtSignOptions = {
@@ -49,7 +50,7 @@ function buildSignOptions(): JwtSignOptions {
       signOptions: buildSignOptions(),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, InternalAuthController],
   providers: [AuthService, LocalStrategy, UserService, JwtStrategy],
 })
 export class AuthModule {}
