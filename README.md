@@ -44,6 +44,15 @@ npm run test
 npm run test:e2e
 ```
 
+## Observability
+
+`GET /metrics` expose les métriques Prometheus du service:
+- métriques runtime Node.js via `prom-client`,
+- métriques HTTP agrégées par méthode, route normalisée et code statut,
+- compteurs métier auth à faible cardinalité.
+
+Cet endpoint est destiné au scraping Prometheus. Les labels n'incluent pas de données sensibles: aucun email, pseudo, userId, token ou payload métier.
+
 ## Configuration générale
 
 Variables obligatoires:

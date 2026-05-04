@@ -18,6 +18,11 @@ import {
 import { AuthService, PublicRefreshSession } from './auth.service';
 import { Request, Response } from 'express';
 import { JwtGuard } from './guards/jwt.guard';
+import {
+  authLogoutTotal,
+  authRefreshTotal,
+  authSessionsDeletedTotal,
+} from '../observability/metrics';
 
 const REFRESH_COOKIE_NAME = 'refreshToken';
 const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -101,6 +106,7 @@ export class AuthController {
   ): Promise<{ accessToken: string }> {
     const refreshToken = readCookie(req, REFRESH_COOKIE_NAME);
     if (!refreshToken) {
+      authRefreshTotal.labels('failure', 'unauthorized').inc();
       throw new UnauthorizedException('Missing refresh token cookie.');
     }
 
@@ -109,6 +115,7 @@ export class AuthController {
       await this.authService.findActiveRefreshSessionByHash(oldHash);
 
     if (!oldSession) {
+      authRefreshTotal.labels('failure', 'expired_refresh').inc();
       throw new UnauthorizedException('Invalid or expired refresh token.');
     }
 
@@ -129,6 +136,7 @@ export class AuthController {
     await this.authService.revokeRefreshSessionByHash(oldHash);
 
     this.setRefreshCookie(res, newRefreshToken);
+    authRefreshTotal.labels('success', 'unknown').inc();
 
     return { accessToken };
   }
@@ -146,6 +154,7 @@ export class AuthController {
     }
 
     this.clearRefreshCookie(res);
+    authLogoutTotal.labels('success').inc();
     return { message: 'Logged out' };
   }
 
@@ -168,6 +177,7 @@ export class AuthController {
       getCurrentUserId(req),
       sessionId,
     );
+    authSessionsDeletedTotal.labels('success').inc();
     return { message: 'Session revoked' };
   }
 
@@ -180,6 +190,7 @@ export class AuthController {
   ): Promise<{ message: string }> {
     await this.authService.revokeAllUserSessions(getCurrentUserId(req));
     this.clearRefreshCookie(res);
+    authSessionsDeletedTotal.labels('success').inc();
     return { message: 'Logged out' };
   }
 }
