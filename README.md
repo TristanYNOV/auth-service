@@ -48,8 +48,9 @@ npm run test:e2e
 
 `GET /metrics` expose les métriques Prometheus du service:
 - métriques runtime Node.js via `prom-client`,
-- métriques HTTP agrégées par méthode, route normalisée et code statut,
-- compteurs métier auth à faible cardinalité.
+- métriques HTTP agrégées par méthode, route normalisée et code statut.
+
+Les métriques auth usuelles (login, refresh, logout, register, suppression de sessions) sont déduites des métriques HTTP par route et code statut.
 
 Cet endpoint est destiné au scraping Prometheus. Les labels n'incluent pas de données sensibles: aucun email, pseudo, userId, token ou payload métier.
 

@@ -1,11 +1,8 @@
-import { NextFunction, Request, Response } from 'express';
-import {
-  httpRequestDurationSeconds,
-  httpRequestsInFlight,
-  httpRequestsTotal,
-} from './metrics';
+import { Request, Response } from 'express';
 
-type RequestWithRoute = Request & {
+export const HTTP_METRICS_RECORDED_KEY = 'httpMetricsRecorded';
+
+export type RequestWithRoute = Request & {
   route?: {
     path?: string | RegExp | Array<string | RegExp>;
   };
@@ -15,38 +12,15 @@ const UUID_PATTERN =
   /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi;
 const OBJECT_ID_PATTERN = /(?<=\/)[0-9a-f]{24}(?=\/|$)/gi;
 
-export function httpMetricsMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  if (req.path === '/metrics') {
-    next();
-    return;
-  }
-
-  const method = req.method;
-  const inFlightRoute = '/pending';
-  const start = process.hrtime.bigint();
-
-  httpRequestsInFlight.labels(method, inFlightRoute).inc();
-
-  res.once('finish', () => {
-    const route = normalizeRoute(req);
-    const statusCode = String(res.statusCode);
-    const durationSeconds = Number(process.hrtime.bigint() - start) / 1e9;
-
-    httpRequestsInFlight.labels(method, inFlightRoute).dec();
-    httpRequestsTotal.labels(method, route, statusCode).inc();
-    httpRequestDurationSeconds
-      .labels(method, route, statusCode)
-      .observe(durationSeconds);
-  });
-
-  next();
+export function markHttpMetricsRecorded(res: Response): void {
+  res.locals[HTTP_METRICS_RECORDED_KEY] = true;
 }
 
-function normalizeRoute(req: RequestWithRoute): string {
+export function hasHttpMetricsRecorded(res: Response): boolean {
+  return res.locals[HTTP_METRICS_RECORDED_KEY] === true;
+}
+
+export function normalizeRoute(req: RequestWithRoute): string {
   const routePath = toRoutePath(req.route?.path);
   if (routePath) {
     return normalizePath(`${req.baseUrl ?? ''}${routePath}`);
