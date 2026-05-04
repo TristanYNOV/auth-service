@@ -6,6 +6,8 @@ import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health.controller';
 import * as process from 'node:process';
 import { MetricsController } from './observability/metrics.controller';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { HttpMetricsInterceptor } from './observability/http-metrics.interceptor';
 
 @Module({
   imports: [
@@ -19,6 +21,11 @@ import { MetricsController } from './observability/metrics.controller';
     AuthModule,
   ],
   controllers: [HealthController, MetricsController],
-  providers: [],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpMetricsInterceptor,
+    },
+  ],
 })
 export class AppModule {}
