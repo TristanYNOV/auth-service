@@ -13,6 +13,7 @@ type RabbitMessage = {
 @Injectable()
 export class UserDeletionConsumerService implements OnModuleInit {
   private readonly logger = new Logger(UserDeletionConsumerService.name);
+  private consumerStarted = false;
 
   constructor(
     private readonly rabbitmqService: RabbitmqService,
@@ -27,14 +28,7 @@ export class UserDeletionConsumerService implements OnModuleInit {
       return;
     }
 
-    await this.rabbitmqService.consume(
-      this.rabbitmqService.authQueue,
-      USER_DATA_ANONYMIZED,
-      (message, channel) => this.handleRabbitMessage(message, channel),
-    );
-    this.logger.log(
-      `Listening for ${USER_DATA_ANONYMIZED} on ${this.rabbitmqService.authQueue}`,
-    );
+    void this.startConsumerWithRetry();
   }
 
   private async handleRabbitMessage(
@@ -63,5 +57,40 @@ export class UserDeletionConsumerService implements OnModuleInit {
 
       channel.nack(message, false, true);
     }
+  }
+
+  private async startConsumerWithRetry(): Promise<void> {
+    let attempt = 1;
+
+    while (!this.consumerStarted) {
+      try {
+        await this.rabbitmqService.consume(
+          this.rabbitmqService.authQueue,
+          USER_DATA_ANONYMIZED,
+          (message, channel) => this.handleRabbitMessage(message, channel),
+        );
+        this.consumerStarted = true;
+        this.logger.log(
+          `Listening for ${USER_DATA_ANONYMIZED} on ${this.rabbitmqService.authQueue}`,
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Unknown RabbitMQ connection error';
+        const delayMs = Math.min(30000, attempt * 2000);
+        this.logger.warn(
+          `RabbitMQ consumer startup failed (attempt ${attempt}): ${message}. Retrying in ${delayMs}ms.`,
+        );
+        await this.delay(delayMs);
+        attempt += 1;
+      }
+    }
+  }
+
+  private delay(delayMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, delayMs);
+    });
   }
 }
