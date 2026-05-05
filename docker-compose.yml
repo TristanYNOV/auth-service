@@ -27,11 +27,11 @@ services:
       - .env
     environment:
       PORT: ${PORT:-3000}
-      DATABASE_URL: ${DATABASE_URL:-mongodb://auth_db:27017}
+      DATABASE_URL: mongodb://auth_db:27017
       DB_NAME: ${DB_NAME:-auth}
       JWT_SECRET: ${JWT_SECRET:-change-me}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
-      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://app:change_me@rabbitmq:5672}
+      RABBITMQ_URL: amqp://app:change_me@rabbitmq:5672
       RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-domain.events}
       RABBITMQ_QUEUE_AUTH: ${RABBITMQ_QUEUE_AUTH:-auth-service.user-deletion}
     ports:

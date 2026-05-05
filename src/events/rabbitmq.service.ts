@@ -137,12 +137,27 @@ export class RabbitmqService implements OnModuleDestroy {
       throw new Error('Invalid amqplib module: missing connect');
     }
 
-    this.connection = await amqp.connect(url);
-    this.channel = await this.connection.createChannel();
-    await this.channel.assertExchange(this.exchange, 'topic', {
-      durable: true,
-    });
+    try {
+      this.connection = await amqp.connect(url);
+      this.channel = await this.connection.createChannel();
+      await this.channel.assertExchange(this.exchange, 'topic', {
+        durable: true,
+      });
 
-    return this.channel;
+      return this.channel;
+    } catch (error) {
+      await this.resetConnection();
+      throw error;
+    }
+  }
+
+  private async resetConnection(): Promise<void> {
+    const channel = this.channel;
+    const connection = this.connection;
+    this.channel = undefined;
+    this.connection = undefined;
+
+    await channel?.close().catch(() => undefined);
+    await connection?.close().catch(() => undefined);
   }
 }
