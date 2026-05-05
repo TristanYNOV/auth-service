@@ -7,6 +7,7 @@ import { MeController } from '../me.controller';
 import { AdminController } from '../admin/admin.controller';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AdminBootstrapProvider } from './providers/admin-bootstrap.provider';
+import { UserDeletionModule } from '../user-deletion/user-deletion.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AdminBootstrapProvider } from './providers/admin-bootstrap.provider';
         schema: UserSchema,
       },
     ]),
+    UserDeletionModule,
   ],
   providers: [UserService, RolesGuard, AdminBootstrapProvider],
   controllers: [UserController, MeController, AdminController],
