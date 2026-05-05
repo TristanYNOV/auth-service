@@ -2,8 +2,8 @@ name: Publish Docker image
 
 on:
   push:
-    branches:
-      - prod
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: read
@@ -19,6 +19,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate stable SemVer tag
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag '${GITHUB_REF_NAME}' n'est pas un tag SemVer stable (attendu: vX.Y.Z)."
+            exit 1
+          fi
+
+      - name: Ensure tagged commit is on origin/prod
+        run: |
+          git fetch --no-tags origin prod
+
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/prod"; then
+            echo "Le commit taggé (${GITHUB_SHA}) n'appartient pas à l'historique de origin/prod."
+            exit 1
+          fi
 
       - name: Derive image name
         id: image
@@ -32,6 +50,7 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
+            type=raw,value=${{ github.ref_name }}
             type=raw,value=prod
             type=raw,value=sha-${{ github.sha }}
 
@@ -61,10 +80,11 @@ jobs:
           {
             echo "## GHCR publication"
             echo ""
-            echo "- Image: \\`${{ steps.image.outputs.name }}\\`"
-            echo "- Tag prod: \\`${{ steps.image.outputs.name }}:prod\\`"
-            echo "- Tag sha: \\`${{ steps.image.outputs.name }}:sha-${{ github.sha }}\\`"
-            echo "- Digest: \\`${{ steps.build_push.outputs.digest }}\\`"
+            echo "- Image: \`${{ steps.image.outputs.name }}\`"
+            echo "- Tag version: \`${{ steps.image.outputs.name }}:${{ github.ref_name }}\`"
+            echo "- Tag prod: \`${{ steps.image.outputs.name }}:prod\`"
+            echo "- Tag sha: \`${{ steps.image.outputs.name }}:sha-${{ github.sha }}\`"
+            echo "- Digest: \`${{ steps.build_push.outputs.digest }}\`"
             echo ""
             echo "> Rappel: le repo infra devrait idéalement déployer l'image via ce digest (référence immuable)."
           } >> "$GITHUB_STEP_SUMMARY"
