@@ -31,11 +31,35 @@ services:
       DB_NAME: ${DB_NAME:-auth}
       JWT_SECRET: ${JWT_SECRET:-change-me}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://app:change_me@rabbitmq:5672}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-domain.events}
+      RABBITMQ_QUEUE_AUTH: ${RABBITMQ_QUEUE_AUTH:-auth-service.user-deletion}
     ports:
       - '3000:3000'
     depends_on:
       auth_db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - auth_net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: auth_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: app
+      RABBITMQ_DEFAULT_PASS: change_me
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - auth_net
 

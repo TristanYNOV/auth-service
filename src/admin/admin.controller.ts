@@ -17,6 +17,7 @@ import { toUserPublicDto, UserPublicDto } from '../user/dto/UserPublic.dto';
 import { UpdateUserDto } from '../schemas/UpdateUser.schema';
 import { encryptPassword } from '../utils/bcrypt';
 import mongoose from 'mongoose';
+import { UserDeletionService } from '../user-deletion/user-deletion.service';
 
 function checkIDParam(id: string) {
   const isValid = mongoose.Types.ObjectId.isValid(id);
@@ -32,7 +33,10 @@ function checkIDParam(id: string) {
 @UseGuards(JwtGuard, RolesGuard)
 @Roles('admin')
 export class AdminController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly userDeletionService: UserDeletionService,
+  ) {}
 
   @Get('users')
   async listUsers(): Promise<UserPublicDto[]> {
@@ -65,14 +69,18 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<{ user: UserPublicDto; message: string }> {
     checkIDParam(id);
-    const deletedUser = await this.userService.deleteUserById(id);
-    if (!deletedUser) {
+    const result = await this.userDeletionService.requestDeletion(
+      id,
+      'admin',
+      'admin_action',
+    );
+    if (!result) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }
 
     return {
-      user: toUserPublicDto(deletedUser),
-      message: 'User Deleted',
+      user: toUserPublicDto(result.user),
+      message: 'User deletion workflow started',
     };
   }
 }

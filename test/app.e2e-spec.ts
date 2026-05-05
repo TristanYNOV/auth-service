@@ -21,6 +21,7 @@ import { CreateUserDto } from '../src/user/dto/CreateUser.dto';
 import { UserRole } from '../src/schemas/User.schema';
 import { encryptPassword } from '../src/utils/bcrypt';
 import { RefreshSession } from '../src/schemas/RefreshSession.schema';
+import { UserDeletionService } from '../src/user-deletion/user-deletion.service';
 
 type StoredUser = {
   _id: string;
@@ -28,6 +29,7 @@ type StoredUser = {
   pseudo: string;
   password: string;
   roles: UserRole[];
+  status?: 'active' | 'pending_deletion' | 'deleted' | 'deletion_failed';
 };
 
 function toPublicUser(user: StoredUser): Omit<StoredUser, 'password'> {
@@ -36,6 +38,7 @@ function toPublicUser(user: StoredUser): Omit<StoredUser, 'password'> {
     email: user.email,
     pseudo: user.pseudo,
     roles: user.roles,
+    status: user.status,
   };
 }
 
@@ -71,6 +74,7 @@ class InMemoryUserService {
       pseudo: createUserDto.pseudo,
       password: createUserDto.password,
       roles: ['user'],
+      status: 'active',
     };
 
     this.users.set(id, user);
@@ -90,6 +94,7 @@ class InMemoryUserService {
       pseudo: payload.pseudo,
       password: payload.password,
       roles: ['admin'],
+      status: 'active',
     };
 
     this.users.set(id, admin);
@@ -125,7 +130,7 @@ class InMemoryUserService {
 
   async updateUser(
     id: string,
-    updateUserDto: UpdateUserDto,
+    updateUserDto: UpdateUserDto & Partial<StoredUser>,
   ): Promise<Omit<StoredUser, 'password'> | null> {
     const currentUser = this.users.get(id);
     if (!currentUser) return null;
@@ -147,6 +152,39 @@ class InMemoryUserService {
 
     this.users.delete(id);
     return toPublicUser(currentUser);
+  }
+
+  isUserActive(user: Pick<StoredUser, 'status'> | null | undefined): boolean {
+    return !user?.status || user.status === 'active';
+  }
+}
+
+class InMemoryUserDeletionService {
+  constructor(private readonly userService: InMemoryUserService) {}
+
+  async requestDeletion(
+    userId: string,
+    requestedBy: 'self' | 'admin' | 'system',
+    reason: 'user_request' | 'admin_action' | 'test' | 'unknown',
+  ) {
+    const user = await this.userService.updateUser(userId, {
+      status: 'pending_deletion',
+    } as Partial<StoredUser> & UpdateUserDto);
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      user,
+      workflow: {
+        userId,
+        requestedBy,
+        reason,
+        status: 'anonymizing',
+        correlationId: new Types.ObjectId().toString(),
+      },
+    };
   }
 }
 
@@ -342,6 +380,12 @@ describe('Auth flow and RBAC (e2e)', () => {
         JwtStrategy,
         JwtGuard,
         RolesGuard,
+        {
+          provide: UserDeletionService,
+          useFactory: (userService: InMemoryUserService) =>
+            new InMemoryUserDeletionService(userService),
+          inject: [UserService],
+        },
       ],
     }).compile();
 
@@ -582,5 +626,74 @@ describe('Auth flow and RBAC (e2e)', () => {
       .post('/auth/refresh')
       .set('Cookie', cookies[cookies.length - 1])
       .expect(200);
+  });
+
+  it('DELETE /me starts deletion workflow and blocks login, refresh, and protected routes', async () => {
+    const email = `delete_me_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `delete_me_user_${Date.now()}`;
+
+    await request(server)
+      .post('/users')
+      .send({ email, password, pseudo })
+      .expect(201);
+
+    const loginResponse = await request(server)
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+
+    const accessToken = extractAccessTokenFromResponse(loginResponse);
+    const refreshCookie = getSetCookieValues(loginResponse.headers).find(
+      (cookie) => cookie.startsWith('refreshToken='),
+    );
+
+    await request(server)
+      .delete('/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200)
+      .expect((response) => {
+        expect(response.body.message).toBe('User deletion workflow started');
+      });
+
+    await request(server)
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(401);
+    await request(server)
+      .post('/auth/refresh')
+      .set('Cookie', refreshCookie as string)
+      .expect(401);
+    await request(server)
+      .get('/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(401);
+  });
+
+  it('DELETE /admin/users/:id starts deletion workflow for admins', async () => {
+    const adminLogin = await request(server)
+      .post('/auth/login')
+      .send({ email: 'admin@example.com', password: 'StrongPass1!' })
+      .expect(201);
+
+    const target = await request(server)
+      .post('/users')
+      .send({
+        email: `admin_delete_${Date.now()}@example.com`,
+        password: 'StrongPass1!',
+        pseudo: `admin_delete_user_${Date.now()}`,
+      })
+      .expect(201);
+
+    await request(server)
+      .delete(`/admin/users/${target.body.id}`)
+      .set(
+        'Authorization',
+        `Bearer ${extractAccessTokenFromResponse(adminLogin)}`,
+      )
+      .expect(200)
+      .expect((response) => {
+        expect(response.body.message).toBe('User deletion workflow started');
+      });
   });
 });

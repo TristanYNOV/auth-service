@@ -17,6 +17,7 @@ import { toUserPublicDto, UserPublicDto } from './user/dto/UserPublic.dto';
 import { AuthenticatedRequest } from './auth/types/authenticated-request.type';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { Roles } from './auth/decorators/roles.decorator';
+import { UserDeletionService } from './user-deletion/user-deletion.service';
 
 function getCurrentUserId(req: AuthenticatedRequest): string {
   const userId = req.user?.sub;
@@ -34,7 +35,10 @@ function getCurrentUserId(req: AuthenticatedRequest): string {
 @UseGuards(JwtGuard, RolesGuard)
 @Roles('user')
 export class MeController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly userDeletionService: UserDeletionService,
+  ) {}
 
   @Get('me')
   async getMe(@Req() req: AuthenticatedRequest): Promise<UserPublicDto> {
@@ -67,15 +71,17 @@ export class MeController {
   async deleteMe(
     @Req() req: AuthenticatedRequest,
   ): Promise<{ user: UserPublicDto; message: string }> {
-    const deletedUser = await this.userService.deleteUserById(
+    const result = await this.userDeletionService.requestDeletion(
       getCurrentUserId(req),
+      'self',
+      'user_request',
     );
-    if (!deletedUser)
+    if (!result)
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
     return {
-      user: toUserPublicDto(deletedUser),
-      message: 'User Deleted',
+      user: toUserPublicDto(result.user),
+      message: 'User deletion workflow started',
     };
   }
 }

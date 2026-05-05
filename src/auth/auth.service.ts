@@ -48,6 +48,10 @@ export class AuthService {
       );
     }
 
+    if (!this.userService.isUserActive(findUser)) {
+      throw new UnauthorizedException('Unauthorized: user is not active.');
+    }
+
     const isPasswordValid = await bcrypt.compare(
       user.password,
       findUser.password,
@@ -172,6 +176,12 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException(
         'User linked to refresh token not found.',
+      );
+    }
+
+    if (!this.userService.isUserActive(user)) {
+      throw new UnauthorizedException(
+        'User linked to refresh token is not active.',
       );
     }
 
