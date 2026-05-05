@@ -2,6 +2,11 @@ import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { IsEmail, IsIn, IsNotEmpty, IsStrongPassword } from 'class-validator';
 
 export type UserRole = 'user' | 'admin';
+export type UserStatus =
+  | 'active'
+  | 'pending_deletion'
+  | 'deleted'
+  | 'deletion_failed';
 
 @Schema({ versionKey: false })
 export class User {
@@ -21,6 +26,20 @@ export class User {
   @Prop({ type: [String], enum: ['user', 'admin'], default: ['user'] })
   @IsIn(['user', 'admin'], { each: true })
   roles: UserRole[];
+
+  @Prop({
+    type: String,
+    enum: ['active', 'pending_deletion', 'deleted', 'deletion_failed'],
+    default: 'active',
+    index: true,
+  })
+  status: UserStatus;
+
+  @Prop()
+  deletionRequestedAt?: Date;
+
+  @Prop()
+  deletedAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
