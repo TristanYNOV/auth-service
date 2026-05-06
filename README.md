@@ -57,10 +57,57 @@ npm run test:e2e
 `GET /metrics` expose les métriques Prometheus du service:
 - métriques runtime Node.js via `prom-client`,
 - métriques HTTP agrégées par méthode, route normalisée et code statut.
+- métriques RabbitMQ métier et workflow de suppression utilisateur.
 
 Les métriques auth usuelles (login, refresh, logout, register, suppression de sessions) sont déduites des métriques HTTP par route et code statut.
 
 Cet endpoint est destiné au scraping Prometheus. Les labels n'incluent pas de données sensibles: aucun email, pseudo, userId, token ou payload métier.
+
+### Métriques RabbitMQ métier
+
+Événements couverts:
+- publication `user.deletion.requested`
+- consommation `user.data.anonymized`
+- publication `user.deleted`
+
+Métriques communes:
+- `rabbitmq_business_events_published_total`
+- `rabbitmq_business_events_consumed_total`
+- `rabbitmq_business_event_publish_duration_seconds`
+- `rabbitmq_business_event_processing_duration_seconds`
+
+Labels:
+- `service` (label Prometheus par défaut du service)
+- `event_type`
+- `routing_key`
+- `result`
+
+Valeurs bornées:
+- `event_type` / `routing_key`: `user.deletion.requested`, `user.data.anonymized`, `user.deleted`, `unknown`
+- `result` publication: `success`, `failure`
+- `result` consommation: `success`, `failure`, `ignored`, `duplicate`, `invalid`
+
+Métriques suppression utilisateur:
+- `user_deletion_workflows_started_total` avec `requested_by`, `reason`
+- `user_deletion_workflows_completed_total`
+- `user_deletion_workflows_failed_total` avec `failure_step`
+- `user_deletion_workflow_duration_seconds` avec `result`
+
+Valeurs bornées:
+- `requested_by`: `self`, `admin`, `system`, `unknown`
+- `reason`: `user_request`, `admin_action`, `test`, `unknown`
+- `failure_step`: `publish_requested_event`, `consume_anonymized_event`, `finalize_user`, `publish_deleted_event`, `unknown`
+- `result`: `completed`, `failed`
+
+PromQL utiles:
+
+```promql
+sum by(event_type, result) (rate(rabbitmq_business_events_published_total{service="auth-service"}[5m]))
+sum by(event_type, result) (rate(rabbitmq_business_events_consumed_total{service="auth-service"}[5m]))
+histogram_quantile(0.95, sum by(le, event_type) (rate(rabbitmq_business_event_processing_duration_seconds_bucket{service="auth-service"}[5m])))
+sum(rate(user_deletion_workflows_completed_total{service="auth-service"}[5m]))
+sum by(failure_step) (rate(user_deletion_workflows_failed_total{service="auth-service"}[5m]))
+```
 
 ## Configuration générale
 

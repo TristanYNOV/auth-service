@@ -23,6 +23,17 @@ function buildAnonymizedEvent(): UserDataAnonymizedEvent {
 }
 
 describe('UserDeletionService', () => {
+  const metrics = {
+    recordWorkflowStarted: jest.fn(),
+    recordWorkflowCompleted: jest.fn(),
+    recordWorkflowFailed: jest.fn(),
+    observeWorkflowDuration: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('finalizes the workflow and publishes user.deleted when all required services completed', async () => {
     const workflow = {
       userId: '507f1f77bcf86cd799439011',
@@ -59,6 +70,7 @@ describe('UserDeletionService', () => {
       refreshSessionModel as never,
       workflowModel as never,
       rabbitmqService as never,
+      metrics as never,
     );
 
     const published = await service.handleDataAnonymized(
@@ -85,6 +97,11 @@ describe('UserDeletionService', () => {
     );
     expect(workflow.status).toBe('deleted');
     expect(published?.eventType).toBe(USER_DELETED);
+    expect(metrics.recordWorkflowCompleted).toHaveBeenCalledTimes(1);
+    expect(metrics.observeWorkflowDuration).toHaveBeenCalledWith(
+      workflow.requestedAt,
+      'completed',
+    );
   });
 
   it('is idempotent when analysis-store-service already completed', async () => {
@@ -110,6 +127,7 @@ describe('UserDeletionService', () => {
       {} as never,
       workflowModel as never,
       rabbitmqService as never,
+      metrics as never,
     );
 
     await expect(

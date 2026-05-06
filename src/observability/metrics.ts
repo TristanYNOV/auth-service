@@ -75,3 +75,51 @@ export const httpRequestsInFlight = gauge(
   'Number of HTTP requests currently in flight.',
   ['method', 'route'],
 );
+
+export const rabbitmqBusinessEventsPublishedTotal = counter(
+  'rabbitmq_business_events_published_total',
+  'Total number of RabbitMQ business events published.',
+  ['event_type', 'routing_key', 'result'],
+);
+
+export const rabbitmqBusinessEventsConsumedTotal = counter(
+  'rabbitmq_business_events_consumed_total',
+  'Total number of RabbitMQ business events consumed.',
+  ['event_type', 'routing_key', 'result'],
+);
+
+export const rabbitmqBusinessEventPublishDurationSeconds = histogram(
+  'rabbitmq_business_event_publish_duration_seconds',
+  'RabbitMQ business event publish duration in seconds.',
+  ['event_type', 'routing_key', 'result'],
+);
+
+export const rabbitmqBusinessEventProcessingDurationSeconds = histogram(
+  'rabbitmq_business_event_processing_duration_seconds',
+  'RabbitMQ business event consumer processing duration in seconds.',
+  ['event_type', 'routing_key', 'result'],
+);
+
+export const userDeletionWorkflowsStartedTotal = counter(
+  'user_deletion_workflows_started_total',
+  'Total number of user deletion workflows started.',
+  ['requested_by', 'reason'],
+);
+
+export const userDeletionWorkflowsCompletedTotal = counter(
+  'user_deletion_workflows_completed_total',
+  'Total number of user deletion workflows completed.',
+  [],
+);
+
+export const userDeletionWorkflowsFailedTotal = counter(
+  'user_deletion_workflows_failed_total',
+  'Total number of failed user deletion workflows.',
+  ['failure_step'],
+);
+
+export const userDeletionWorkflowDurationSeconds = histogram(
+  'user_deletion_workflow_duration_seconds',
+  'User deletion workflow duration in seconds.',
+  ['result'],
+);
