@@ -4,6 +4,7 @@ import {
   UserDataAnonymizedEvent,
 } from '../events/event-contracts';
 import { RabbitChannel, RabbitmqService } from '../events/rabbitmq.service';
+import { RabbitmqBusinessMetricsService } from '../observability/rabbitmq-business-metrics.service';
 import { UserDeletionService } from './user-deletion.service';
 
 type RabbitMessage = {
@@ -18,6 +19,7 @@ export class UserDeletionConsumerService implements OnModuleInit {
   constructor(
     private readonly rabbitmqService: RabbitmqService,
     private readonly userDeletionService: UserDeletionService,
+    private readonly metrics: RabbitmqBusinessMetricsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -35,11 +37,26 @@ export class UserDeletionConsumerService implements OnModuleInit {
     message: RabbitMessage,
     channel: RabbitChannel,
   ): Promise<void> {
+    const endTimer = this.metrics.startProcessingTimer(
+      USER_DATA_ANONYMIZED,
+      USER_DATA_ANONYMIZED,
+    );
+    let parsed = false;
+
     try {
       const event = JSON.parse(
         message.content.toString('utf8'),
       ) as UserDataAnonymizedEvent;
-      await this.userDeletionService.handleDataAnonymized(event);
+      parsed = true;
+      const publishedEvent =
+        await this.userDeletionService.handleDataAnonymized(event);
+      const result = publishedEvent ? 'success' : 'ignored';
+      this.metrics.recordConsumedEvent(
+        USER_DATA_ANONYMIZED,
+        USER_DATA_ANONYMIZED,
+        result,
+      );
+      endTimer(result);
       channel.ack(message);
     } catch (error) {
       const messageText =
@@ -50,11 +67,24 @@ export class UserDeletionConsumerService implements OnModuleInit {
         `Failed to process ${USER_DATA_ANONYMIZED}: ${messageText}`,
       );
 
-      if (messageText.startsWith('Invalid event')) {
+      if (!parsed || messageText.startsWith('Invalid event')) {
+        this.metrics.recordConsumedEvent(
+          USER_DATA_ANONYMIZED,
+          USER_DATA_ANONYMIZED,
+          'invalid',
+        );
+        endTimer('invalid');
         channel.ack(message);
         return;
       }
 
+      this.metrics.recordConsumedEvent(
+        USER_DATA_ANONYMIZED,
+        USER_DATA_ANONYMIZED,
+        'failure',
+      );
+      this.metrics.recordWorkflowFailed('consume_anonymized_event');
+      endTimer('failure');
       channel.nack(message, false, true);
     }
   }

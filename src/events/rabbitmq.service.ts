@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { RabbitmqBusinessMetricsService } from '../observability/rabbitmq-business-metrics.service';
 import { DomainEvent } from './event-contracts';
 
 type RabbitMessage = {
@@ -45,6 +46,8 @@ export class RabbitmqService implements OnModuleDestroy {
   private connection?: RabbitConnection;
   private channel?: RabbitChannel;
 
+  constructor(private readonly metrics: RabbitmqBusinessMetricsService) {}
+
   get exchange(): string {
     return process.env.RABBITMQ_EXCHANGE?.trim() || 'domain.events';
   }
@@ -63,23 +66,37 @@ export class RabbitmqService implements OnModuleDestroy {
     routingKey: string,
     event: DomainEvent<TData>,
   ): Promise<void> {
-    const channel = await this.getChannel();
-    const published = channel.publish(
-      this.exchange,
+    const endTimer = this.metrics.startPublishTimer(
+      event.eventType,
       routingKey,
-      Buffer.from(JSON.stringify(event)),
-      {
-        contentType: 'application/json',
-        deliveryMode: 2,
-        persistent: true,
-        messageId: event.eventId,
-        correlationId: event.correlationId,
-        timestamp: Date.now(),
-      },
     );
 
-    if (!published) {
-      throw new Error(`RabbitMQ publish returned false for ${routingKey}`);
+    try {
+      const channel = await this.getChannel();
+      const published = channel.publish(
+        this.exchange,
+        routingKey,
+        Buffer.from(JSON.stringify(event)),
+        {
+          contentType: 'application/json',
+          deliveryMode: 2,
+          persistent: true,
+          messageId: event.eventId,
+          correlationId: event.correlationId,
+          timestamp: Date.now(),
+        },
+      );
+
+      if (!published) {
+        throw new Error(`RabbitMQ publish returned false for ${routingKey}`);
+      }
+
+      this.metrics.recordPublishedEvent(event.eventType, routingKey, 'success');
+      endTimer('success');
+    } catch (error) {
+      this.metrics.recordPublishedEvent(event.eventType, routingKey, 'failure');
+      endTimer('failure');
+      throw error;
     }
   }
 

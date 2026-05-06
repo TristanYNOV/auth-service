@@ -7,6 +7,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { randomUUID } from 'node:crypto';
 import { HydratedDocument, Model, Types } from 'mongoose';
 import { RabbitmqService } from '../events/rabbitmq.service';
+import { RabbitmqBusinessMetricsService } from '../observability/rabbitmq-business-metrics.service';
 import {
   USER_DATA_ANONYMIZED,
   USER_DELETED,
@@ -36,6 +37,7 @@ export class UserDeletionService {
     @InjectModel(UserDeletionWorkflow.name)
     private readonly workflowModel: Model<UserDeletionWorkflow>,
     private readonly rabbitmqService: RabbitmqService,
+    private readonly metrics: RabbitmqBusinessMetricsService,
   ) {}
 
   async requestDeletion(
@@ -77,6 +79,7 @@ export class UserDeletionService {
       requestedAt: now,
       finalizedAt: null,
     });
+    this.metrics.recordWorkflowStarted(requestedBy, reason);
 
     user.status = 'pending_deletion';
     user.deletionRequestedAt = now;
@@ -106,6 +109,8 @@ export class UserDeletionService {
       );
       return { user, workflow };
     } catch (error) {
+      this.metrics.recordWorkflowFailed('publish_requested_event');
+      this.metrics.observeWorkflowDuration(workflow.requestedAt, 'failed');
       workflow.status = 'failed';
       workflow.failedServices = ['rabbitmq'];
       await workflow.save();
@@ -175,18 +180,24 @@ export class UserDeletionService {
     workflow: UserDeletionWorkflowDocument,
   ): Promise<UserDeletedEvent> {
     const deletedAt = new Date();
-    await this.userModel
-      .findByIdAndUpdate(workflow.userId, {
-        $set: {
-          status: 'deleted',
-          pseudo: 'Utilisateur supprime',
-          email: `deleted-${workflow.userId}@deleted.local`,
-          deletionRequestedAt: workflow.requestedAt,
-          deletedAt,
-        },
-      })
-      .exec();
-    await this.revokeActiveRefreshSessions(workflow.userId);
+    try {
+      await this.userModel
+        .findByIdAndUpdate(workflow.userId, {
+          $set: {
+            status: 'deleted',
+            pseudo: 'Utilisateur supprime',
+            email: `deleted-${workflow.userId}@deleted.local`,
+            deletionRequestedAt: workflow.requestedAt,
+            deletedAt,
+          },
+        })
+        .exec();
+      await this.revokeActiveRefreshSessions(workflow.userId);
+    } catch (error) {
+      this.metrics.recordWorkflowFailed('finalize_user');
+      this.metrics.observeWorkflowDuration(workflow.requestedAt, 'failed');
+      throw error;
+    }
 
     const event: UserDeletedEvent = {
       eventId: randomUUID(),
@@ -206,11 +217,15 @@ export class UserDeletionService {
       workflow.status = 'deleted';
       workflow.finalizedAt = deletedAt;
       await workflow.save();
+      this.metrics.recordWorkflowCompleted();
+      this.metrics.observeWorkflowDuration(workflow.requestedAt, 'completed');
       this.logger.log(
         `Workflow complete for user ${workflow.userId}; published ${USER_DELETED}`,
       );
       return event;
     } catch (error) {
+      this.metrics.recordWorkflowFailed('publish_deleted_event');
+      this.metrics.observeWorkflowDuration(workflow.requestedAt, 'failed');
       workflow.status = 'failed';
       workflow.failedServices = ['rabbitmq'];
       await workflow.save();
