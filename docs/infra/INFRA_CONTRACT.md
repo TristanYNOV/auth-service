@@ -8,9 +8,11 @@
 - Repository image: `ghcr.io/<owner_lower>/auth-service`
 - Visibilité image: privée
 - Tags publiés:
+  - `latest` (mouvant)
   - `prod` (mouvant)
-  - `sha-<full_sha>` (immuable)
-- Déclencheur de publication: `push` sur la branche `prod` uniquement.
+  - `X.Y.Z` (version SemVer sans préfixe `v`)
+- Déclencheur de publication: push d'un tag Git stable `vX.Y.Z` uniquement.
+- Condition de publication: le commit taggé doit appartenir à l'historique de `origin/prod`.
 - Le workflow de publication fournit explicitement le digest GHCR final dans son résumé d’exécution.
 
 ## 2) Port exposé
@@ -79,12 +81,12 @@ Optionnelles:
 
 - Le repo infra est censé consommer l’image privée via des droits de lecture GHCR.
 - Référence recommandée pour le déploiement: digest (`image@sha256:...`) récupéré depuis le résumé du workflow de publication.
-- Référence de secours: tag immuable `sha-<full_sha>`.
-- Le tag `prod` peut servir de repère fonctionnel, mais ne doit pas remplacer un pin par digest en environnement stable.
+- Référence de secours: tag version `X.Y.Z`.
+- Les tags `latest` et `prod` peuvent servir de repères fonctionnels, mais ne doivent pas remplacer un pin par digest en environnement stable.
 
 ## 9) Hypothèses de déploiement stables
 
 - Déploiement derrière Traefik same-origin avec front recommandé.
 - Endpoint santé utilisé pour readiness/liveness.
-- Image immuable (digest GHCR ou `sha-<full_sha>`) en environnement stable.
+- Image verrouillée par digest GHCR, ou à défaut par tag version `X.Y.Z`, en environnement stable.
 - Une unique instance admin logique est imposée par la donnée applicative (exactement un admin) ; stratégie multi-instance **À confirmer** côté orchestration.

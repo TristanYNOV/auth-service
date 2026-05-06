@@ -13,15 +13,17 @@ Ce dossier contient le contrat d’intégration infra de `auth-service`.
 - Le mapping reverse proxy vers `/api/auth/*` avec suppression du préfixe.
 - Les variables d’environnement obligatoires.
 - Le healthcheck `GET /health`.
-- Le principe de déploiement avec image immuable via digest GHCR (ou à défaut `sha-<full_sha>`).
+- Le principe de déploiement avec image versionnée GHCR, idéalement verrouillée par digest.
 
-## Publication GHCR (branche `prod`)
+## Publication GHCR
 
-- Le workflow de publication Docker/GHCR se déclenche **uniquement** sur un `push` de la branche `prod`.
+- Le workflow de publication Docker/GHCR se déclenche **uniquement** sur push d'un tag Git stable `vX.Y.Z`.
+- Le commit taggé doit appartenir à l'historique de `origin/prod`.
 - L’image publiée est privée et reste stablement nommée: `ghcr.io/<owner_lower>/auth-service`.
 - Les tags publiés sont strictement:
+  - `latest`
   - `prod`
-  - `sha-<full_sha>`
+  - `X.Y.Z` (version SemVer sans préfixe `v`)
 - Le repo infra doit consommer cette image avec des droits de lecture GHCR (token/service account adapté).
 - Pour déployer la bonne version rapidement:
   - consulter le résumé du workflow GitHub Actions (image, tags, digest final),
