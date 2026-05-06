@@ -1,5 +1,13 @@
 # auth-service
 
+## Suppression utilisateur event-driven
+
+`DELETE /me` et `DELETE /admin/users/:id` demarrent maintenant un workflow RabbitMQ: `auth-service` publie `user.deletion.requested`, attend `user.data.anonymized`, finalise l'utilisateur en `deleted`, puis publie `user.deleted`.
+
+- Exchange: `domain.events`
+- Queue: `auth-service.user-deletion`
+- Documentation: [docs/contracts/events/user-deletion.md](docs/contracts/events/user-deletion.md)
+
 Service d’authentification du projet **Analyse Basket** (architecture microservices).
 
 ## Rôle dans l’architecture Analyse Basket

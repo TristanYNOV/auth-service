@@ -59,6 +59,10 @@ export class UserService {
     return this.userModel.findOne({ email }).exec();
   }
 
+  isUserActive(user: Pick<User, 'status'> | null | undefined): boolean {
+    return !user?.status || user.status === 'active';
+  }
+
   async updateUser(id: string, updateUserDto: UpdateUserDto) {
     try {
       return await this.userModel.findByIdAndUpdate(id, updateUserDto, {
