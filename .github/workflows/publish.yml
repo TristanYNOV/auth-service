@@ -28,10 +28,12 @@ jobs:
             echo "Tag '${GITHUB_REF_NAME}' n'est pas un tag SemVer stable (attendu: vX.Y.Z)."
             exit 1
           fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: Ensure tagged commit is on origin/prod
         run: |
-          git fetch --no-tags origin prod
+          git fetch origin prod
 
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/prod"; then
             echo "Le commit taggé (${GITHUB_SHA}) n'appartient pas à l'historique de origin/prod."
@@ -50,9 +52,9 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=${{ github.ref_name }}
+            type=raw,value=latest
             type=raw,value=prod
-            type=raw,value=sha-${{ github.sha }}
+            type=raw,value=${{ env.VERSION }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -81,9 +83,9 @@ jobs:
             echo "## GHCR publication"
             echo ""
             echo "- Image: \`${{ steps.image.outputs.name }}\`"
-            echo "- Tag version: \`${{ steps.image.outputs.name }}:${{ github.ref_name }}\`"
+            echo "- Tag latest: \`${{ steps.image.outputs.name }}:latest\`"
             echo "- Tag prod: \`${{ steps.image.outputs.name }}:prod\`"
-            echo "- Tag sha: \`${{ steps.image.outputs.name }}:sha-${{ github.sha }}\`"
+            echo "- Tag version: \`${{ steps.image.outputs.name }}:${{ env.VERSION }}\`"
             echo "- Digest: \`${{ steps.build_push.outputs.digest }}\`"
             echo ""
             echo "> Rappel: le repo infra devrait idéalement déployer l'image via ce digest (référence immuable)."
