@@ -28,6 +28,7 @@ jobs:
             echo "Tag '${GITHUB_REF_NAME}' n'est pas un tag SemVer stable (attendu: vX.Y.Z)."
             exit 1
           fi
+
           VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
@@ -111,14 +112,21 @@ jobs:
         shell: bash
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.VPS_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+
+          printf '%s' "${{ secrets.VPS_SSH_PRIVATE_KEY }}" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+
+          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
+
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Deploy auth-service on VPS
         shell: bash
         run: |
-          ssh -i ~/.ssh/deploy_key \
+          ssh \
+            -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
             -p "${{ secrets.VPS_PORT }}" \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "/opt/actionboard/deploy-service.sh auth-service"
