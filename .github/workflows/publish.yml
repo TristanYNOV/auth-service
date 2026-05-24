@@ -92,41 +92,53 @@ jobs:
             echo "> Rappel: le repo infra devrait idéalement déployer l'image via ce digest (référence immuable)."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  deploy-prod:
-    name: Deploy auth-service to VPS
+  trigger-infra-deploy:
+    name: Trigger infra deployment for auth-service
     runs-on: ubuntu-latest
     needs: docker
     if: ${{ success() && startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      contents: read
     steps:
       - name: Validate SemVer tag
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME}"
-
           if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Tag ${TAG} is not a valid SemVer tag like v1.0.0"
             exit 1
           fi
 
-      - name: Configure SSH
+      - name: Trigger infra deploy workflow
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.INFRA_WORKFLOW_TOKEN }}
+          SERVICE: auth-service
+          VERSION_TAG: ${{ github.ref_name }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
         run: |
-          mkdir -p ~/.ssh
+          set -euo pipefail
 
-          printf '%s' "${{ secrets.VPS_SSH_PRIVATE_KEY }}" | base64 -d > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          payload="$(jq -nc \
+            --arg ref "prod" \
+            --arg service "${SERVICE}" \
+            --arg version_tag "${VERSION_TAG}" \
+            --arg source_repository "${SOURCE_REPOSITORY}" \
+            --arg source_sha "${SOURCE_SHA}" \
+            '{
+              ref: $ref,
+              inputs: {
+                service: $service,
+                version_tag: $version_tag,
+                source_repository: $source_repository,
+                source_sha: $source_sha
+              }
+            }')"
 
-          ssh-keygen -y -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub
-
-          ssh-keyscan -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Deploy auth-service on VPS
-        shell: bash
-        run: |
-          ssh \
-            -i ~/.ssh/deploy_key \
-            -o IdentitiesOnly=yes \
-            -o BatchMode=yes \
-            -p "${{ secrets.VPS_PORT }}" \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "/opt/actionboard/deploy-service.sh auth-service"
+          curl --fail-with-body -fsSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/tristanynov/infra/actions/workflows/deploy-prod.yml/dispatches \
+            -d "${payload}"
