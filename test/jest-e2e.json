@@ -3,6 +3,7 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "watchman": false,
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   }
