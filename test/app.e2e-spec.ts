@@ -490,6 +490,44 @@ describe('Auth flow and RBAC (e2e)', () => {
     expect(sessionsResponse.body[0]).not.toHaveProperty('refreshTokenHash');
   });
 
+  it('keeps publicly registered users out of admin routes even when roles are injected', async () => {
+    const email = `public_admin_injection_${Date.now()}@example.com`;
+    const password = 'StrongPass1!';
+    const pseudo = `public_admin_injection_${Date.now()}`;
+
+    const created = await request(server)
+      .post('/users')
+      .send({
+        email,
+        password,
+        pseudo,
+        roles: ['admin'],
+        status: 'active',
+      })
+      .expect(201);
+
+    const loginResponse = await request(server)
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+
+    await request(server)
+      .get('/admin/users')
+      .set(
+        'Authorization',
+        `Bearer ${extractAccessTokenFromResponse(loginResponse)}`,
+      )
+      .expect(403);
+
+    await request(server)
+      .delete(`/admin/users/${created.body.id}`)
+      .set(
+        'Authorization',
+        `Bearer ${extractAccessTokenFromResponse(loginResponse)}`,
+      )
+      .expect(403);
+  });
+
   it('revoke specific session removes it from active sessions', async () => {
     const email = `revoke_${Date.now()}@example.com`;
     const password = 'StrongPass1!';
