@@ -1,0 +1,91 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    name: Generate coverage report
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Generate coverage summary
+        env:
+          COVERAGE_REPOSITORY: auth-service
+          COVERAGE_REPORT_DIR: coverage
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const repo = process.env.COVERAGE_REPOSITORY;
+          const reportDir = process.env.COVERAGE_REPORT_DIR;
+          const summaryPath = path.join(reportDir, 'coverage-summary.json');
+          const branch = process.env.GITHUB_REF_NAME || 'dev';
+          const commit = process.env.GITHUB_SHA || '';
+          const generatedAt = new Date().toISOString();
+
+          let metrics = 'Coverage report generated successfully.';
+          if (fs.existsSync(summaryPath)) {
+            const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+            const total = summary.total || {};
+            const pct = (key) =>
+              total[key] && typeof total[key].pct === 'number'
+                ? `${total[key].pct}%`
+                : 'n/a';
+            metrics = [
+              '| Metric | Value |',
+              '|---|---:|',
+              `| Statements | ${pct('statements')} |`,
+              `| Branches | ${pct('branches')} |`,
+              `| Functions | ${pct('functions')} |`,
+              `| Lines | ${pct('lines')} |`,
+            ].join('\n');
+          }
+
+          const markdown = [
+            '# Coverage summary',
+            '',
+            `Repository: ${repo}  `,
+            `Branch: ${branch}  `,
+            `Commit: ${commit.slice(0, 12)}  `,
+            `Generated at: ${generatedAt}`,
+            '',
+            metrics,
+            '',
+            "Coverage informatif uniquement : aucun seuil bloquant n'est applique.",
+            "L'artifact HTML complet est disponible dans les artifacts du workflow.",
+            '',
+          ].join('\n');
+
+          fs.mkdirSync(reportDir, { recursive: true });
+          fs.writeFileSync(path.join(reportDir, 'coverage-summary.md'), markdown);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown);
+          NODE
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-service-coverage-dev
+          path: coverage
+          retention-days: 30
