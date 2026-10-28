@@ -2,7 +2,6 @@
 version: 2
 
 updates:
-  # Dépendances npm
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -10,20 +9,7 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Europe/Paris"
-    open-pull-requests-limit: 5
 
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Europe/Paris"
-    open-pull-requests-limit: 5
+    # Désactive les PR pour les mises à jour
+    # ordinaires de dépendances.
+    open-pull-requests-limit: 0
